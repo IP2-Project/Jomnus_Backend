@@ -12,6 +12,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginAuthDto } from './dto/login.dto';
 import { RegisterAuthDto } from './dto/register-auth.dto';
+import { ForgotPasswordDTO } from './dto/forgotpassword.dto';
+import { ResetPasswordDTO } from './dto/resetpassword-auth.dto';
 import { JwtAuthGuard } from './guards/jwt.auth.guard';
 import { Public } from '@/common/decorators/public.decorator';
 import { UserEntity } from './entity/user.entity';
@@ -65,5 +67,19 @@ export class AuthController {
     @Body('refreshToken') refreshToken: string,
   ) {
     return this.authService.refreshTokens(req.user.id, refreshToken);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request password reset via email OTP' })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDTO) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using OTP' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDTO) {
+    return this.authService.resetPassword(resetPasswordDto);
   }
 }

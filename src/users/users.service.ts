@@ -31,6 +31,22 @@ export class UsersService {
     await this.usersRepository.update(userId, { refreshToken });
   }
 
+  async updateOtp(
+    userId: string,
+    otp: string | null,
+    otpExpiry: Date | null,
+  ): Promise<void> {
+    await this.usersRepository.update(userId, { otp, otpExpiry });
+  }
+
+  async updatePassword(userId: string, password: string): Promise<void> {
+    const user = await this.findById(userId);
+    if (user) {
+      user.password = password;
+      await this.usersRepository.save(user);
+    }
+  }
+
   async findAll(): Promise<UserEntity[]> {
     return this.usersRepository.find();
   }

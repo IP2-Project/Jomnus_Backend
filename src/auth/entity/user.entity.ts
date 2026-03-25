@@ -69,6 +69,14 @@ export class UserEntity extends BaseEntity {
   @Column({ default: () => 'CURRENT_TIMESTAMP' })
   lastLogin: Date;
 
+  @Column({ nullable: true })
+  @Exclude()
+  otp: string | null;
+
+  @Column({ nullable: true })
+  @Exclude()
+  otpExpiry: Date | null;
+
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
