@@ -21,6 +21,12 @@ import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { HealthModule } from './health/health.module';
+import { ApplicationsModule } from './applications/applications.module';
+import { IdentityVerificationsModule } from './identity-verifications/identity-verifications.module';
+import { StatsModule } from './stats/stats.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -54,6 +60,12 @@ import { HealthModule } from './health/health.module';
     ReviewsModule,
     TelegramModule,
     HealthModule,
+    ApplicationsModule,
+    IdentityVerificationsModule,
+    StatsModule,
+    MessagingModule,
+    NotificationsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
