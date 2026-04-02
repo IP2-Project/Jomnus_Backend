@@ -20,6 +20,7 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { TelegramModule } from './telegram/telegram.module';
     ProofsModule,
     ReviewsModule,
     TelegramModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
