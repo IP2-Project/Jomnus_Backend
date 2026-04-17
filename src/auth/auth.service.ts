@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { OAuth2Client } from 'google-auth-library';
 import { LoginAuthDto } from './dto/login.dto';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -19,13 +20,19 @@ import { OtpService } from './services/otp.service';
 
 @Injectable()
 export class AuthService {
+  private googleClient: OAuth2Client;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private emailService: EmailService,
     private otpService: OtpService,
-  ) {}
+  ) {
+    this.googleClient = new OAuth2Client(
+      configService.get<string>('GOOGLE_CLIENT_ID'),
+    );
+  }
 
   async validateUser(
     email: string,
@@ -51,7 +58,17 @@ export class AuthService {
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
-    const user = await this.usersService.create(registerDto);
+
+    // Validate passwords match
+    if (registerDto.password !== registerDto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    // Create user with default helper value
+    const user = await this.usersService.create({
+      ...registerDto,
+      helper: 'none', // Set default helper value
+    });
     return this.generateTokens(user);
   }
 
@@ -66,7 +83,7 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  private async generateTokens(user: UserEntity): Promise<AuthResponseDto> {
+  async generateTokens(user: UserEntity): Promise<AuthResponseDto> {
     const payload = { sub: user.id, email: user.email, role: user.role };
 
     const accessToken = this.jwtService.sign(payload);
@@ -80,8 +97,8 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: user.firstName ?? '',
+        lastName: user.lastName ?? '',
         role: user.role,
       },
     };
@@ -180,5 +197,56 @@ export class AuthService {
       message:
         'Password reset successfully. You can now log in with your new password.',
     };
+  }
+
+  async validateOrCreateGoogleUser(profile: {
+    email: string;
+    firstName: string;
+    lastName: string;
+  }): Promise<UserEntity> {
+    let user = await this.usersService.findByEmail(profile.email);
+
+    if (!user) {
+      // Create new user from Google profile
+      const generatedUsername = profile.email.split('@')[0];
+      const randomPassword = Math.random().toString(36).slice(-20);
+      
+      user = await this.usersService.create({
+        email: profile.email,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        username: generatedUsername,
+        password: randomPassword,
+        confirmPassword: randomPassword,
+        helper: 'none',
+      } as any);
+    }
+
+    return user;
+  }
+
+  async verifyGoogleToken(token: string): Promise<AuthResponseDto> {
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: token,
+        audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
+      });
+
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        throw new UnauthorizedException('Invalid Google token');
+      }
+
+      const user = await this.validateOrCreateGoogleUser({
+        email: payload.email,
+        firstName: payload.given_name || '',
+        lastName: payload.family_name || '',
+      });
+
+      return this.generateTokens(user);
+    } catch (error) {
+      console.error('Google token verification failed:', error);
+      throw new UnauthorizedException('Invalid Google token');
+    }
   }
 }

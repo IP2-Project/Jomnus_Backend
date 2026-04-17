@@ -20,6 +20,11 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { MessagesModule } from './messages/messages.module';
+import { ChatModule } from './chat/chat.module';
+import { ConversationsModule } from './conversations/conversations.module';
+import { TaskApplicationsModule } from './task_applications/task_applications.module';
+import { TaskAssingmentModule } from './task_assingment/task_assingment.module';
 
 @Module({
   imports: [
@@ -38,7 +43,9 @@ import { TelegramModule } from './telegram/telegram.module';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true,
+        migrations: [__dirname + '/migrations/**/*{.ts,.js}'],
+        migrationsRun: configService.get<string>('NODE_ENV') === 'production',
+        synchronize: configService.get<string>('NODE_ENV') !== 'production',
         logging: true,
       }),
     }),
@@ -52,6 +59,12 @@ import { TelegramModule } from './telegram/telegram.module';
     ProofsModule,
     ReviewsModule,
     TelegramModule,
+    MessagesModule,
+    ChatModule,
+    ConversationsModule,
+    TaskApplicationsModule,
+    TaskAssingmentModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
