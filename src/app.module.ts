@@ -20,11 +20,13 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TelegramModule } from './telegram/telegram.module';
-import { MessagesModule } from './messages/messages.module';
-import { ChatModule } from './chat/chat.module';
-import { ConversationsModule } from './conversations/conversations.module';
-import { TaskApplicationsModule } from './task_applications/task_applications.module';
-import { TaskAssingmentModule } from './task_assingment/task_assingment.module';
+import { HealthModule } from './health/health.module';
+import { ApplicationsModule } from './applications/applications.module';
+import { IdentityVerificationsModule } from './identity-verifications/identity-verifications.module';
+import { StatsModule } from './stats/stats.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -59,12 +61,13 @@ import { TaskAssingmentModule } from './task_assingment/task_assingment.module';
     ProofsModule,
     ReviewsModule,
     TelegramModule,
-    MessagesModule,
-    ChatModule,
-    ConversationsModule,
-    TaskApplicationsModule,
-    TaskAssingmentModule,
-    ConversationsModule,
+    HealthModule,
+    ApplicationsModule,
+    IdentityVerificationsModule,
+    StatsModule,
+    MessagingModule,
+    NotificationsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
