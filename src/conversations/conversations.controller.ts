@@ -1,6 +1,6 @@
 import { Body, Controller, Req, UseGuards } from '@nestjs/common';
 import { Get, Patch, Post, Delete } from '@nestjs/common';
-import { UserEntity } from '@/auth/entity/user.entity';
+import { UserEntity } from '@/users/entity/user.entity';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/conversations.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';

@@ -1,5 +1,5 @@
 import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from 'typeorm';
-import { UserEntity } from '@/auth/entity/user.entity';
+import { UserEntity } from '@/users/entity/user.entity';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
 
 @Entity('tasks')

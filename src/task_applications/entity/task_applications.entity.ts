@@ -1,5 +1,5 @@
 import { Column, Entity, ManyToOne, PrimaryColumn } from 'typeorm';
-import { UserEntity } from '@/auth/entity/user.entity';
+import { UserEntity } from '@/users/entity/user.entity';
 import { TasksEntity } from '@/tasks/entity/tasks.entity';
 
 @Entity('task_applications')

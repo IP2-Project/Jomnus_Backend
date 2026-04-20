@@ -23,7 +23,6 @@ import { HealthModule } from './health/health.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { IdentityVerificationsModule } from './identity-verifications/identity-verifications.module';
 import { StatsModule } from './stats/stats.module';
-import { MessagingModule } from './messaging/messaging.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 
@@ -61,7 +60,6 @@ import { AdminModule } from './admin/admin.module';
     ApplicationsModule,
     IdentityVerificationsModule,
     StatsModule,
-    MessagingModule,
     NotificationsModule,
     AdminModule,
   ],

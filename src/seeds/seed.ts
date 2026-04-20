@@ -1,5 +1,5 @@
 import { AppDataSource } from '../../ormconfig';
-import { UserEntity, UserRole } from '../auth/entity/user.entity';
+import { UserEntity, UserRole } from '../users/entity/user.entity';
 import * as bcrypt from 'bcrypt';
 
 const seedDatabase = async () => {

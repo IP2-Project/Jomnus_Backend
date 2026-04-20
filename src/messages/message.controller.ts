@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import type { Request } from 'express';
-import { UserEntity } from '@/auth/entity/user.entity';
+import { UserEntity } from '@/users/entity/user.entity';
 import { CreateMessageDto } from './dto/sent.message';
 
 interface RequestWithUser extends Request {

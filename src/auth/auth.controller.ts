@@ -21,7 +21,7 @@ import { ResetPasswordDTO } from './dto/resetpassword-auth.dto';
 import { JwtAuthGuard } from './guards/jwt.auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { Public } from '@/common/decorators/public.decorator';
-import { UserEntity } from './entity/user.entity';
+import { UserEntity } from '../users/entity/user.entity';
 
 interface RequestWithUser extends ExpressRequest {
   user: UserEntity;

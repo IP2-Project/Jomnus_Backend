@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { TasksEntity } from '@/tasks/entity/tasks.entity';
-import { UserEntity } from '@/auth/entity/user.entity';
+import { UserEntity } from '@/users/entity/user.entity';
 
 @Entity('task_assignments')
 export class task_assignmentEntity {

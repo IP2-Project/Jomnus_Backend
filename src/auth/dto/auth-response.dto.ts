@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { UserRole } from '../entity/user.entity';
+import { UserRole } from '../../users/entity/user.entity';
 
 export class AuthResponseDto {
   @ApiProperty()

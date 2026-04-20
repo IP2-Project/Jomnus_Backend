@@ -14,7 +14,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import { ForgotPasswordDTO } from './dto/forgotpassword.dto';
 import { ResetPasswordDTO } from './dto/resetpassword-auth.dto';
 import { UsersService } from '@/users/users.service';
-import { UserEntity } from './entity/user.entity';
+import { UserEntity } from '../users/entity/user.entity';
 import { EmailService } from './services/email.service';
 import { OtpService } from './services/otp.service';
 
