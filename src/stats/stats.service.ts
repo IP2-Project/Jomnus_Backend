@@ -4,7 +4,7 @@ import { UserProfile } from "./entities/user-profile.entity";
 import { Repository } from "typeorm/browser/repository/Repository.js";
 import { PerformerStats } from "./entities/performer-stats.entity";
 import { RequesterStats } from "./entities/requester-stats.entity";
-import { User } from "@/users/entities/user.entity";
+import { UserEntity } from "@/users/entity/user.entity";
 
 @Injectable()
 export class StatsService {
@@ -19,7 +19,7 @@ export class StatsService {
     private requesterRepo: Repository<RequesterStats>,
   ) {}
 
-  async createInitialStats(user: User) {
+  async createInitialStats(user: UserEntity) {
     await this.profileRepo.save({ user });
 
     await this.performerRepo.save({ user });
