@@ -4,11 +4,13 @@ export class CreateTaskDto {
   @IsString()
   title: string;
 
+  @IsOptional()
   @IsString()
-  description: string;
+  description?: string;
 
-  @IsNumber()
-  categoryId: number;
+  @IsOptional()
+  @IsNumber({}, { each: true })
+  categoryIds?: number[];
 
   @IsOptional()
   @IsString()
