@@ -3,33 +3,32 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity } from '@/users/entity/user.entity';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
+import { StatsService } from '@/stats/stats.service';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(UserEntity)
-    private usersRepository: Repository<UserEntity>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+
+    private statsService: StatsService,
   ) {}
 
-  async findById(id: string): Promise<UserEntity | null> {
+  async findById(id: number): Promise<User | null> {
     return this.usersRepository.findOne({ where: { id } });
   }
 
-  async findByEmail(email: string): Promise<UserEntity | null> {
+  async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
 
-  async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
-    const user = this.usersRepository.create(registerDto);
-    return this.usersRepository.save(user);
+  async findAll(): Promise<User[]> {
+    return this.usersRepository.find();
   }
 
-  async updateRefreshToken(
-    userId: string,
-    refreshToken: string | null,
-  ): Promise<void> {
-    await this.usersRepository.update(userId, { refreshToken });
-  }
+  async create(registerDto: RegisterAuthDto): Promise<User> {
+    const user = this.usersRepository.create(registerDto);
+    const savedUser = await this.usersRepository.save(user);
 
   async updateOtp(
     userId: string,
@@ -50,4 +49,11 @@ export class UsersService {
   async findAll(): Promise<UserEntity[]> {
     return this.usersRepository.find();
   }
+
+  // async updateRefreshToken(
+  //   userId: number,
+  //   refreshToken: string | null,
+  // ): Promise<void> {
+  //   await this.usersRepository.update(userId, { refreshToken });
+  // }
 }
