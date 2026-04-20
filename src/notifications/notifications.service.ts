@@ -11,10 +11,6 @@ export class NotificationsService {
     private readonly notificationRepo: Repository<Notification>,
   ) {}
 
-  async create(createDto: CreateNotificationDto): Promise<Notification> {
-    const notification = this.notificationRepo.create(createDto);
-    return await this.notificationRepo.save(notification);
-  }
 
   private async sendToUser(userId: number, title: string, message: string, taskId?: number) {
     const notification = this.notificationRepo.create({
