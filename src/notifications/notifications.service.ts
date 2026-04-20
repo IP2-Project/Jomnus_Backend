@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
-import { CreateNotificationDto } from './dto/create-notification.dto';
 
 @Injectable()
 export class NotificationsService {
@@ -23,16 +22,6 @@ export class NotificationsService {
     return this.notificationRepo.save(notification);
   }
 
-  private async sendToAdmins(title: string, message: string, taskId?: number) {
-    const notification = this.notificationRepo.create({
-      user_id: null,
-      audience: 'admin',
-      title,
-      message,
-      task_id: taskId ?? null,
-    });
-    return this.notificationRepo.save(notification);
-  }
 
   async notifyApplicationAccepted(performerId: number, taskTitle: string, taskId: number) {
     return this.sendToUser(performerId, 'Application Accepted ', `Congratulations! You have been chosen to complete: ${taskTitle}.`, taskId);
@@ -50,15 +39,7 @@ export class NotificationsService {
     return this.sendToUser(receiverId, 'Proof Ready for Review ', `A performer has submitted proof for "${taskTitle}". Please review it.`, taskId);
   }
 
-  async notifyAdminNewIdVerification(userId: number) {
-    return this.sendToAdmins('New Identity Verification ', `User #${userId} has submitted their ID for verification. Review required.`);
-  }
-
-  async notifyAdminReportedTask(taskId: number, reason: string) {
-    return this.sendToAdmins('Task Flagged ', `Task #${taskId} has been reported for: ${reason}. Please investigate.`, taskId);
-  }
-
-  async getUserNotifications(userId: number) {
+    async getUserNotifications(userId: number) {
     const notifications = await this.notificationRepo.find({
       where: { user_id: userId },
       order: { created_at: 'DESC' },
@@ -74,9 +55,29 @@ export class NotificationsService {
     };
   }
 
+    private async sendToAdmins(title: string, message: string, taskId?: number) {
+    const notification = this.notificationRepo.create({
+      user_id: null,
+      audience: 'admin',
+      title,
+      message,
+      task_id: taskId ?? null,
+    });
+    return this.notificationRepo.save(notification);
+  }
+
+  async notifyAdminNewIdVerification(userId: number) {
+    return this.sendToAdmins('New Identity Verification ', `User #${userId} has submitted their ID for verification. Review required.`);
+  }
+
+  async notifyAdminReportedTask(taskId: number, reason: string) {
+    return this.sendToAdmins('Task Flagged ', `Task #${taskId} has been reported for: ${reason}. Please investigate.`, taskId);
+  }
+
+
   async getAdminNotifications() {
     const notifications = await this.notificationRepo.find({
-      where: { audience: 'admin' }, // Notice we look for the audience, not a specific user ID
+      where: { audience: 'admin' }, 
       order: { created_at: 'DESC' },
     });
 
