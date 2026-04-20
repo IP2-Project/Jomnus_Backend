@@ -16,8 +16,8 @@ import { ProfilesModule } from './profiles/profiles.module';
 import { TasksModule } from './tasks/tasks.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AssignmentsModule } from './assignments/assignments.module';
-import { WorkflowModule } from './workflow/workflow.module';
-import { ProofsModule } from './proofs/proofs.module';
+// import { WorkflowModule } from './workflow/workflow.module';
+// import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { HealthModule } from './health/health.module';
@@ -55,8 +55,8 @@ import { AdminModule } from './admin/admin.module';
     TasksModule,
     CategoriesModule,
     AssignmentsModule,
-    WorkflowModule,
-    ProofsModule,
+    // WorkflowModule,
+    // ProofsModule,
     ReviewsModule,
     TelegramModule,
     HealthModule,

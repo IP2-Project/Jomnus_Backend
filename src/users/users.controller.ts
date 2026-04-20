@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 
@@ -12,7 +12,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findById(@Param('id', ParseIntPipe) id: number) {
     return this.usersService.findById(id);
   }
 
