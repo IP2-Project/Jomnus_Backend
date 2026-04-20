@@ -1,10 +1,18 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 export enum TaskStatus {
-    POSTED = 'POSTED',
-    IN_PROGRESS = 'IN_PROGRESS',
-    COMPLETED = 'COMPLETED',
-    CANCELLED = 'CANCELLED'
+  POSTED = 'POSTED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  PARTIAL_COMPLETED = 'PARTIAL_COMPLETED',
+  COMPLETED = 'COMPLETED',
+  VERIFIED = 'VERIFIED',
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('tasks')
@@ -15,7 +23,7 @@ export class Task {
   @Column()
   title: string;
 
-  @Column('text')
+  @Column('text', { nullable: true })
   description: string;
 
   @Column()
@@ -28,8 +36,15 @@ export class Task {
   deadline: Date;
 
   @Column({ default: 1 })
-  required_workers: number;  
-  
+  required_workers: number;
+
+  @Column({
+    type: 'enum',
+    enum: TaskStatus,
+    default: TaskStatus.POSTED,
+  })
+  status: TaskStatus;
+
   @Column({ nullable: true })
   location_text: string;
 
@@ -38,12 +53,6 @@ export class Task {
 
   @Column({ type: 'float', nullable: true })
   longitude: number;
-
-  @Column({
-    type: 'enum',
-    enum: TaskStatus,
-    default: TaskStatus.POSTED,
-  })
 
   @CreateDateColumn()
   created_at: Date;
