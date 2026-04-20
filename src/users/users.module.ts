@@ -12,6 +12,7 @@ import { StatsModule } from '@/stats/stats.module';
   ],
   controllers: [UsersController],
   providers: [UsersService],
+  exports: [UsersService]
 
 })
 export class UsersModule {}

@@ -1,7 +1,9 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity } from 'typeorm';
+import { BeforeInsert, BeforeUpdate, Column, Entity, OneToOne } from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
 import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcrypt';
+import { PerformerStats } from '@/stats/entities/performer-stats.entity';
+import { RequesterStats } from '@/stats/entities/requester-stats.entity';
 
 export enum UserRole {
   User = 'user',
@@ -88,4 +90,12 @@ export class UserEntity extends BaseEntity {
   async validatePassword(password: string): Promise<boolean> {
     return await bcrypt.compare(password, this.password);
   }
+
+  @OneToOne(() => PerformerStats, (stats) => stats.user)
+  performerStats: PerformerStats;
+
+  @OneToOne(() => RequesterStats, (stats) => stats.user)
+  requesterStats: RequesterStats;
+
+
 }

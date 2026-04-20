@@ -14,7 +14,7 @@ export class UsersService {
     private statsService: StatsService,
   ) {}
 
-  async findById(id: number): Promise<UserEntity | null> {
+  async findById(id: string): Promise<UserEntity | null> {
     return this.usersRepository.findOne({ where: { id } });
   }
 
@@ -24,5 +24,44 @@ export class UsersService {
 
   async findAll(): Promise<UserEntity[]> {
     return this.usersRepository.find();
+  }
+
+  async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
+    const user = this.usersRepository.create({
+      email: registerDto.email,
+      username: registerDto.username,
+      password: registerDto.password,
+      helper: registerDto.helper || 'none',
+    });
+
+    const savedUser = await this.usersRepository.save(user);
+
+    // Create initial stats for the user
+    await this.statsService.createInitialStats(savedUser);
+
+    return savedUser;
+  }
+
+  async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
+    await this.usersRepository.update(userId, {
+      refreshToken: refreshToken || null,
+    });
+  }
+
+  async updateOtp(
+    userId: string,
+    otp: string | null,
+    otpExpiry: Date | null,
+  ): Promise<void> {
+    await this.usersRepository.update(userId, {
+      otp: otp,
+      otpExpiry: otpExpiry,
+    });
+  }
+
+  async updatePassword(userId: string, password: string): Promise<void> {
+    await this.usersRepository.update(userId, {
+      password: password,
+    });
   }
 }

@@ -1,14 +1,17 @@
 import { Column, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn } from "typeorm";
-import { User } from "@/users/entities/user.entity";
+import { UserEntity } from "@/users/entity/user.entity";
 
 @Entity('requester_stats')
 export class RequesterStats {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @OneToOne(() => User, user => user.requesterStats)
-  @JoinColumn()
-  user: User;
+  @Column({ unique: true })
+  user_id: number;
+
+  @OneToOne(() => UserEntity)
+  @JoinColumn({ name: 'user_id' })
+  user: UserEntity;
 
   @Column({ default: 0 })
   tasks_posted: number;
