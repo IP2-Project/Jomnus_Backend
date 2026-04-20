@@ -16,7 +16,6 @@ import { ProfilesModule } from './profiles/profiles.module';
 import { TasksModule } from './tasks/tasks.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AssignmentsModule } from './assignments/assignments.module';
-import { WorkflowModule } from './workflow/workflow.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TelegramModule } from './telegram/telegram.module';
@@ -44,10 +43,8 @@ import { AdminModule } from './admin/admin.module';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        migrations: [__dirname + '/migrations/**/*{.ts,.js}'],
-        migrationsRun: configService.get<string>('NODE_ENV') === 'production',
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        autoLoadEntities: true,
+        synchronize: true,
         logging: true,
       }),
     }),
@@ -57,7 +54,6 @@ import { AdminModule } from './admin/admin.module';
     TasksModule,
     CategoriesModule,
     AssignmentsModule,
-    WorkflowModule,
     ProofsModule,
     ReviewsModule,
     TelegramModule,
