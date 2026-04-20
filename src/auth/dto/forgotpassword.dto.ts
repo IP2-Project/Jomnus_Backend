@@ -3,5 +3,5 @@ export class ForgotPasswordDTO {
   @IsEmail()
   @IsNotEmpty()
   @IsString()
-  email: string;
+  email!: string;
 }

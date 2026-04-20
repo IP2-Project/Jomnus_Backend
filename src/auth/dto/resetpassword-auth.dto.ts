@@ -1,15 +1,27 @@
-import { IsEmail, IsString, Length, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger/dist/decorators/api-property.decorator';
+import {
+  IsEmail,
+  IsString,
+  Length,
+  MinLength,
+  IsNotEmpty,
+} from 'class-validator';
+
 export class ResetPasswordDTO {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsNotEmpty()
   @IsEmail()
-  email: string;
+  email!: string;
 
+  @ApiProperty({ example: '123456' })
+  @IsNotEmpty()
   @IsString()
-  @Length(6, 6, { message: 'OTP must be exactly 6 characters long' })
-  otp: string;
+  @Length(6, 6)
+  otp!: string;
 
+  @ApiProperty({ example: 'New password must be at least 8 characters long' })
+  @IsNotEmpty()
   @IsString()
-  @MinLength(8, {
-    message: 'Password is too short. Minimum length is 8 characters',
-  })
-  password: string;
+  @MinLength(8)
+  password!: string;
 }

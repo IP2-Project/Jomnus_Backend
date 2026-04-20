@@ -11,63 +11,71 @@ export enum UserRole {
 @Entity('users')
 export class UserEntity extends BaseEntity {
   @Column({ unique: true })
-  email: string;
+  email!: string;
 
   @Column({ unique: true })
-  username: string;
+  username!: string;
 
   @Column({ default: false })
-  isOnline: boolean;
+  isOnline!: boolean;
 
   @Column({ nullable: true })
-  firstName: string;
+  firstName?: string;
 
   @Column({ nullable: true })
-  lastName: string;
+  lastName?: string;
 
   @Column({ nullable: true })
-  avatar: string;
+  avatar?: string;
 
   @Column({ nullable: true })
-  position: string;
+  position?: string;
 
   @Column()
   @Exclude()
-  password: string;
+  password!: string;
 
   @Column({ nullable: true })
-  phone: number;
+  phone?: number;
 
   @Column({ nullable: true })
-  address: string;
+  address?: string;
 
   @Column({ nullable: true })
-  gender: string;
+  gender?: string;
 
   @Column({ nullable: true })
-  bod: Date;
+  bod?: Date;
 
   @Column({ nullable: true })
-  country: string;
+  country?: string;
 
   @Column({ nullable: true })
-  city: string;
+  city?: string;
 
   @Column({ nullable: true })
-  zipCode: string;
+  zipCode?: string;
 
   @Column({ type: 'enum', enum: ['response', 'request', 'none'] })
-  helper: 'response' | 'request' | 'none';
+  helper!: 'response' | 'request' | 'none';
 
   @Column({ type: 'text', nullable: true })
   @Exclude()
-  refreshToken: string | null;
+  refreshToken?: string | null;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.User })
-  role: UserRole;
+  role!: UserRole;
 
   @Column({ default: () => 'CURRENT_TIMESTAMP' })
-  lastLogin: Date;
+  lastLogin!: Date;
+
+  @Column({ type: 'varchar', nullable: true })
+  @Exclude()
+  otp?: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  @Exclude()
+  otpExpiry?: Date | null;
 
   @BeforeInsert()
   @BeforeUpdate()

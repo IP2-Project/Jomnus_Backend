@@ -24,7 +24,6 @@ import { HealthModule } from './health/health.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { IdentityVerificationsModule } from './identity-verifications/identity-verifications.module';
 import { StatsModule } from './stats/stats.module';
-import { MessagingModule } from './messaging/messaging.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 
@@ -44,7 +43,7 @@ import { AdminModule } from './admin/admin.module';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        autoLoadEntities: true,
         synchronize: true,
         logging: true,
       }),
@@ -55,15 +54,13 @@ import { AdminModule } from './admin/admin.module';
     TasksModule,
     CategoriesModule,
     AssignmentsModule,
-    // WorkflowModule,
-    // ProofsModule,
+    ProofsModule,
     ReviewsModule,
     TelegramModule,
     HealthModule,
     ApplicationsModule,
     IdentityVerificationsModule,
     StatsModule,
-    MessagingModule,
     NotificationsModule,
     AdminModule,
   ],

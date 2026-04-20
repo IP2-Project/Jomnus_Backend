@@ -6,11 +6,11 @@ export class LoginAuthDto {
   @IsEmail()
   @IsNotEmpty()
   @IsString()
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'Password must be at least 6 characters long' })
   @IsNotEmpty()
   @IsString()
   @MinLength(6)
-  password: string;
+  password!: string;
 }
