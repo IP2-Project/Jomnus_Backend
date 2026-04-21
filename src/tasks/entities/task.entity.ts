@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { UserEntity } from '@/users/entity/user.entity';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
+import { TaskCategory } from '@/categories/entities/task-category.entity';
 
 export enum TaskStatus {
   POSTED = 'POSTED',
@@ -67,6 +68,9 @@ export class TaskEntity {
 
   @OneToMany(() => ConversationsEntity, (conversation) => conversation.task)
   conversations!: ConversationsEntity[];
+
+  @OneToMany(() => TaskCategory, (tc) => tc.task)
+  taskCategories!: TaskCategory[];
 
   // ================= TIMESTAMP =================
 

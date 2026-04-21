@@ -1,8 +1,9 @@
 import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Unique } from 'typeorm';
 
 @Entity('reviews')
+@Unique(['assignment_id'])
 export class Review {
   @PrimaryGeneratedColumn()
   id!: number;

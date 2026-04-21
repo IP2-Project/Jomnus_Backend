@@ -7,15 +7,18 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 
 export enum ApplicationStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('task-applications')
+@Unique(['task_id', 'performer_id'])
 export class TaskApplicationEntity {
   @PrimaryGeneratedColumn()
   id!: number;

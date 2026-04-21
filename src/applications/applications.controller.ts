@@ -6,21 +6,23 @@ import {
   Param,
   Patch,
   Delete,
+  Req,
 } from '@nestjs/common';
 
 import { ApplicationsService } from './applications.service';
-import { CreateApplicationDto } from './dto/create-application.dto';
 import { ApplicationStatus } from './entities/task-application.entity';
+import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
+import { CreateApplicationDto } from './dto/create-application.dto';
 
 @Controller('applications')
 export class ApplicationsController {
     constructor(private readonly appService: ApplicationsService) {}
 
     @Post()
-    create(@Body() body: { taskId: number; userId: number }) {
+    create(@Body() dto: CreateApplicationDto, @Req() req: RequestWithUser) {
         return this.appService.create(
-            { taskId: body.taskId },
-            body.userId,
+            dto,
+            req.user.id
         );
     }
 
@@ -29,9 +31,20 @@ export class ApplicationsController {
         return this.appService.findByTask(Number(taskId));
     }
 
-    @Patch(':id')
-    updateStatus(@Param('id') id: string, @Body() body: { status: ApplicationStatus }) {
-        return this.appService.updateStatus(Number(id), body.status);
+    @Patch(':id/reject')
+    reject(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+    ) {
+    return this.appService.rejectApplication(Number(id), req.user);
+    }
+
+    @Patch(':id/cancel')
+    cancel(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+    ) {
+    return this.appService.cancelApplication(Number(id), req.user);
     }
 
     @Delete(':id')
@@ -40,8 +53,10 @@ export class ApplicationsController {
     }
 
     @Patch(':id/accept')
-    accept(@Param('id') id: string) {
-    return this.appService.acceptApplication(Number(id));
+    accept(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+    ) {
+    return this.appService.acceptApplication(Number(id), req.user);
     }
-
 }

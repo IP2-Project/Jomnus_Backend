@@ -1,3 +1,4 @@
+import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 import {
@@ -33,6 +34,10 @@ export class TaskAssignmentEntity {
 
   @Column('float')
   accepted_price!: number;
+
+  @ManyToOne(() => TaskApplicationEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'application_id' })
+  application!: TaskApplicationEntity;
 
   @Column({
     type: 'enum',

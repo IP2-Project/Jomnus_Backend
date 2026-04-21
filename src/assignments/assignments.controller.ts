@@ -4,10 +4,12 @@ import {
   Param,
   Patch,
   Body,
+  Req,
 } from '@nestjs/common';
 
 import { AssignmentsService } from './assignments.service';
 import { AssignmentStatus } from './entities/assignment.entity';
+import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
 
 @Controller('assignments')
 export class AssignmentsController {
@@ -18,11 +20,33 @@ export class AssignmentsController {
     return this.assignService.findByTask(Number(taskId));
   }
 
-  @Patch(':id/status')
-  updateStatus(
+  @Patch(':id/complete')
+  complete(
     @Param('id') id: string,
-    @Body() body: { status: AssignmentStatus },
+    @Req() req: RequestWithUser,
   ) {
-    return this.assignService.updateStatus(Number(id), body.status);
+    return this.assignService.completeAssignment(Number(id), req.user);
   }
+
+  @Patch(':id/verify')
+  verify(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.assignService.verifyAssignment(Number(id), req.user);
+  }
+
+  @Patch(':id/cancel')
+  cancel(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.assignService.cancelAssignment(Number(id), req.user);
+  }  
+
+  @Get('my')
+  getMy(@Req() req: RequestWithUser) {
+    return this.assignService.findByUser(req.user.id);
+  }  
+  
 }

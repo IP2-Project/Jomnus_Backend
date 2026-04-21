@@ -1,8 +1,9 @@
 import { TaskEntity } from '@/tasks/entities/task.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Unique } from 'typeorm';
 import { Category } from './category.entity';
 
 @Entity('task_categories')
+@Unique(['task_id', 'category_id'])
 export class TaskCategory {
   @PrimaryGeneratedColumn()
   id!: number;

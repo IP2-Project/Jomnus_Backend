@@ -8,6 +8,12 @@ export enum ProofType {
   LOCATION = 'LOCATION',
 }
 
+export enum ProofStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 @Entity('task_proofs')
 export class Proof {
   @PrimaryGeneratedColumn()
@@ -25,6 +31,13 @@ export class Proof {
     enum: ProofType,
   })
   type!: ProofType;
+
+  @Column({
+    type: 'enum',
+    enum: ProofStatus,
+    default: ProofStatus.PENDING,
+  })
+  status!: ProofStatus;
 
   @Column({ nullable: true })
   file_url?: string;

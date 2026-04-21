@@ -25,6 +25,9 @@ export class Notification {
   @Column({ type: 'text' })
   message!: string;
 
+  @Column({ nullable: true })
+  type!: string; // 'APPLICATION_ACCEPTED', 'NEW_MESSAGE'
+  
   @Column({ default: false })
   is_read!: boolean;
 

@@ -11,8 +11,6 @@ export class ConversationsEntity {
   @Column()
   task_id!: number;
 
-  // @ManyToOne(() => TasksEntity, (task) => task.conversation)
-  // task!: TasksEntity;  
 
   @JoinColumn({ name: 'task_id' })
   @ManyToOne(() => TaskEntity, (task) => task.conversations, {

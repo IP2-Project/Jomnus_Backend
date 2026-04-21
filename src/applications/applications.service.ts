@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -8,6 +8,7 @@ import { TasksService } from '@/tasks/tasks.service';
 import { TaskStatus } from '@/tasks/entities/task.entity';
 import { AssignmentsService } from '@/assignments/assignments.service';
 import { UsersService } from '@/users/users.service';
+import { UserEntity } from '@/users/entity/user.entity';
 
 @Injectable()
 export class ApplicationsService {
@@ -42,6 +43,7 @@ export class ApplicationsService {
         const app = this.appRepo.create({
             task_id: dto.taskId,
             performer_id: userId,
+            offered_price: dto.offeredPrice,
         });
 
         return this.appRepo.save(app);
@@ -53,60 +55,96 @@ export class ApplicationsService {
         });
     }
 
-    updateStatus(id: number, status: ApplicationStatus) {
-        return this.appRepo.update(id, { status });
-    }
-
-    remove(id: number) {
-        return this.appRepo.delete(id);
-    }
-
-    async acceptApplication(applicationId: number) {
+    async rejectApplication(applicationId: number, user: UserEntity) {
         const application = await this.appRepo.findOne({
             where: { id: applicationId },
         });
 
-        if (!application) throw new Error('Application not found');
-        
-        // PREVENT ACCEPTING ALREADY ACCEPTED
+        if (!application) {
+            throw new NotFoundException('Application not found');
+        }
+
+        const task = await this.tasksService.findOne(application.task_id);
+        if (!task) throw new NotFoundException('Task not found');
+
+        if (task.requester_id !== user.id) {
+            throw new ForbiddenException();
+        }
+
+        if (application.status !== ApplicationStatus.PENDING) {
+            throw new BadRequestException('Cannot reject this application');
+        }
+
+        await this.appRepo.update(applicationId, {
+            status: ApplicationStatus.REJECTED,
+        });
+
+        return { message: 'Application rejected' };
+        }
+
+        remove(id: number) {
+            return this.appRepo.delete(id);
+    }
+
+    async cancelApplication(applicationId: number, user: UserEntity) {
+    const application = await this.appRepo.findOne({
+        where: { id: applicationId },
+    });
+
+    if (!application) {
+        throw new NotFoundException('Application not found');
+    }
+
+    if (application.performer_id !== user.id) {
+        throw new ForbiddenException();
+    }
+
+    if (application.status !== ApplicationStatus.PENDING) {
+        throw new BadRequestException('Cannot cancel this application');
+    }
+
+    await this.appRepo.update(applicationId, {
+        status: ApplicationStatus.CANCELLED,
+    });
+
+    return { message: 'Application cancelled' };
+    }
+
+    async acceptApplication(applicationId: number, user: UserEntity) {
+        const application = await this.appRepo.findOne({
+            where: { id: applicationId },
+        });
+
+        if (!application) throw new NotFoundException('Application not found');
+
+        const task = await this.tasksService.findOne(application.task_id);
+        if (!task) throw new NotFoundException('Task not found');
+
+        if (task.requester_id !== user.id) {
+            throw new ForbiddenException('Only task owner can accept');
+        }
+
         if (application.status === ApplicationStatus.ACCEPTED) {
-            throw new Error('Application already accepted');
+            throw new BadRequestException('Already accepted');
         }
 
-        // PREVENT ACCEPTING REJECTED
         if (application.status === ApplicationStatus.REJECTED) {
-            throw new Error('Cannot accept rejected application');
+            throw new BadRequestException('Already rejected');
         }
-
-        const taskId = application.task_id;
-
-        const task = await this.tasksService.findOne(taskId);
-
-        if (!task) throw new Error('Task not found');
 
         if (task.status !== TaskStatus.POSTED) {
-        throw new Error('Task is no longer accepting applications');
+            throw new BadRequestException('Task not accepting applications');
         }
 
         const acceptedCount = await this.appRepo.count({
             where: {
-            task_id: taskId,
+            task_id: task.id,
             status: ApplicationStatus.ACCEPTED,
             },
         });
 
         if (acceptedCount >= task.required_workers) {
-            throw new Error('Task already has enough workers');
-        }
-
-        const existingAssignments = await this.assignmentsService.findByTask(taskId);
-
-        const alreadyAssigned = existingAssignments.find(
-            (a) => a.performer_id === application.performer_id,
-        );
-
-        if (alreadyAssigned) {
-            throw new Error('User already assigned');
+            throw new BadRequestException('Enough workers already');
         }
 
         await this.appRepo.update(applicationId, {
@@ -114,28 +152,25 @@ export class ApplicationsService {
         });
 
         await this.assignmentsService.create(
-            taskId,
+            task.id,
             application.performer_id,
         );
 
-        const newAcceptedCount = acceptedCount + 1;
         const requester = await this.userService.findById(task.requester_id);
 
-        if (newAcceptedCount >= task.required_workers) {
+        if (acceptedCount + 1 >= task.required_workers) {
             await this.appRepo
             .createQueryBuilder()
             .update()
             .set({ status: ApplicationStatus.REJECTED })
-            .where('task_id = :taskId', { taskId })
+            .where('task_id = :taskId', { taskId: task.id })
             .andWhere('status = :status', { status: ApplicationStatus.PENDING })
             .execute();
 
             await this.tasksService.update(
-                taskId, 
-                {
-                status: TaskStatus.IN_PROGRESS,
-                },
-                requester!,
+            task.id,
+            { status: TaskStatus.IN_PROGRESS },
+            requester!,
             );
         }
 

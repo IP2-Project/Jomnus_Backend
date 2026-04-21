@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Delete, Injectable, NotFoundException, Param } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 
@@ -13,7 +13,15 @@ export class CategoriesService {
     private categoryRepo: Repository<Category>,
   ) {}
 
-  create(dto: CreateCategoryDto) {
+  async create(dto: CreateCategoryDto) {
+    const existing = await this.categoryRepo.findOne({
+      where: { name: dto.name },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Category already exists');
+    }
+
     const category = this.categoryRepo.create(dto);
     return this.categoryRepo.save(category);
   }
@@ -26,7 +34,35 @@ export class CategoriesService {
     return this.categoryRepo.findBy({ id: In(ids) });
   }
 
-  update(id: number, dto: UpdateCategoryDto) {
-    return this.categoryRepo.update(id, dto);
+  async update(id: number, dto: UpdateCategoryDto) {
+    await this.categoryRepo.update(id, dto);
+    return this.findOne(id);
   }
+
+  async remove(id: number) {
+    const category = await this.categoryRepo.findOne({
+      where: { id },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    await this.categoryRepo.delete(id);
+
+    return { message: 'Category deleted' };
+  }
+
+  async findOne(id: number) {
+    const category = await this.categoryRepo.findOne({
+      where: { id },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    return category;
+  }
+
 }
