@@ -5,12 +5,15 @@ import {
   Patch,
   Body,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 
 import { AssignmentsService } from './assignments.service';
 import { AssignmentStatus } from './entities/assignment.entity';
 import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
+import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('assignments')
 export class AssignmentsController {
   constructor(private readonly assignService: AssignmentsService) {}

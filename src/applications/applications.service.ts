@@ -154,6 +154,8 @@ export class ApplicationsService {
         await this.assignmentsService.create(
             task.id,
             application.performer_id,
+            application.id,
+            application.offered_price 
         );
 
         const requester = await this.userService.findById(task.requester_id);
