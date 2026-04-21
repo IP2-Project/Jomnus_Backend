@@ -14,15 +14,10 @@ export class RegisterAuthDto {
   @IsString()
   email!: string;
 
-  @ApiProperty({ example: 'John' })
+  @ApiProperty({ example: 'John Doe' })
   @IsNotEmpty()
   @IsString()
-  firstName!: string;
-
-  @ApiProperty({ example: 'Doe' })
-  @IsNotEmpty()
-  @IsString()
-  lastName!: string;
+  fullName!: string;
 
   @ApiProperty({ example: 'Password must be at least 6 characters long' })
   @IsNotEmpty()

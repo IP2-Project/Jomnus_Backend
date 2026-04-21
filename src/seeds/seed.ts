@@ -27,8 +27,7 @@ const seedDatabase = async () => {
     const adminUser = userRepository.create({
       email: 'admin@jomnus.com',
       password: 'JomnusAdmin@12345',
-      firstName: 'Admin',
-      lastName: 'User',
+      fullName: 'Jomnus Admin',
       currentRole: UserRole.ADMIN,
     });
 
@@ -40,17 +39,15 @@ const seedDatabase = async () => {
       {
         email: 'john.doe@jomnus.com',
         password: 'User@123456',
-        firstName: 'John',
-        lastName: 'Doe',
         city: 'Phnom Penh',
+        fullName: 'john doe',
         country: 'Cambodia',
         currentRole: UserRole.PERFORMER,
       },
       {
         email: 'jane.smith@jomnus.com',
         password: 'User@123456',
-        firstName: 'Jane',
-        lastName: 'Smith',
+        fullName: 'jane smith',
         city: 'Siem Reap',
         country: 'Cambodia',
         currentRole: UserRole.REQUESTER,
@@ -58,8 +55,7 @@ const seedDatabase = async () => {
       {
         email: 'michael.johnson@jomnus.com',
         password: 'User@123456',
-        firstName: 'Michael',
-        lastName: 'Johnson',
+        fullName: 'Michae johnl',
         city: 'Battambang',
         country: 'Cambodia',
         currentRole: UserRole.REQUESTER,

@@ -30,8 +30,7 @@ export class UsersService {
     const user = this.usersRepository.create({
       email: registerDto.email,
       password: registerDto.password,
-      firstName: registerDto.firstName,
-      lastName: registerDto.lastName,
+      fullName: registerDto.fullName
     });
 
     const savedUser = await this.usersRepository.save(user);

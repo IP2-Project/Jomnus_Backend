@@ -22,11 +22,8 @@ export enum UserRole {
 
 @Entity('users')
 export class UserEntity extends BaseEntity {
-  @Column({ name: 'first_name' })
-  firstName!: string;
-
-  @Column({ name: 'last_name' })
-  lastName!: string;
+  @Column({ name: 'FullName' })
+  fullName!: string;
 
   @Column({ unique: true })
   email!: string;

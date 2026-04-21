@@ -94,8 +94,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.firstName ?? '',
-        lastName: user.lastName ?? '',
+        fullName: user.fullName ?? '',
         role: user.currentRole,
       },
     };
@@ -128,7 +127,7 @@ export class AuthService {
       await this.emailService.sendPasswordResetEmail(
         user.email,
         otp,
-        user.firstName || user.email,
+        user.fullName || user.email,
       );
     } catch (error) {
       console.error('Failed to send reset email:', error);
@@ -184,7 +183,7 @@ export class AuthService {
     try {
       await this.emailService.sendPasswordResetSuccessEmail(
         user.email,
-        user.firstName || user.email,
+        user.fullName || user.email,
       );
     } catch (error) {
       console.error('Failed to send success email:', error);
@@ -198,8 +197,7 @@ export class AuthService {
 
   async validateOrCreateGoogleUser(profile: {
     email: string;
-    firstName: string;
-    lastName: string;
+    fullName: string;
   }): Promise<UserEntity> {
     let user = await this.usersService.findByEmail(profile.email);
 
@@ -210,8 +208,7 @@ export class AuthService {
       
       user = await this.usersService.create({
         email: profile.email,
-        firstName: profile.firstName,
-        lastName: profile.lastName,
+        fullName: profile.fullName,
         password: randomPassword,
         confirmPassword: randomPassword,
       });
@@ -234,8 +231,7 @@ export class AuthService {
 
       const user = await this.validateOrCreateGoogleUser({
         email: payload.email,
-        firstName: payload.given_name || '',
-        lastName: payload.family_name || '',
+        fullName: payload.given_name || '',
       });
 
       return this.generateTokens(user);
