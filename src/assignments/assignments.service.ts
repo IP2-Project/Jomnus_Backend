@@ -15,10 +15,12 @@ export class AssignmentsService {
         private taskRepo: Repository<TaskEntity>
     ) {}
 
-    create(taskId: number, performerId: number) {
+    create(taskId: number, performerId: number,  applicationId: number, price: number) {
         const assignment = this.assignRepo.create({
         task_id: taskId,
         performer_id: performerId,
+        application_id: applicationId,
+        accepted_price: price,  
         });
 
         return this.assignRepo.save(assignment);

@@ -7,13 +7,16 @@ import {
   Patch,
   Delete,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 
 import { ApplicationsService } from './applications.service';
 import { ApplicationStatus } from './entities/task-application.entity';
 import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('applications')
 export class ApplicationsController {
     constructor(private readonly appService: ApplicationsService) {}
