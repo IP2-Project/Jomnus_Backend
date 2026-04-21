@@ -10,7 +10,7 @@ import {
 
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
-import { ApplicationStatus } from './entities/application.entity';
+import { ApplicationStatus } from './entities/task-application.entity';
 
 @Controller('applications')
 export class ApplicationsController {

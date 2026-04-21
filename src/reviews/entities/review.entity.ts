@@ -1,37 +1,52 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
+import { UserEntity } from '@/users/entity/user.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('reviews')
 export class Review {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id!: number;
 
   @Column()
-  assignment_id: string;
+  assignment_id!: number;
 
   @Column()
-  reviewer_id: string;
+  reviewer_id!: number;
 
   @Column()
-  reviewee_id: string;
+  reviewee_id!: number;
 
   @Column()
-  rating: number;
+  rating!: number;
 
   @Column()
-  reliability: number;
+  reliability!: number;
 
   @Column()
-  speed: number;
+  speed!: number;
 
   @Column()
-  communication: number;
+  communication!: number;
 
   @Column()
-  accuracy: number;
+  accuracy!: number;
 
   @Column()
-  comment: string;
+  comment!: string;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
+
+  @ManyToOne(() => TaskAssignmentEntity)
+  @JoinColumn({ name: 'assignment_id' })
+  assignment!: TaskAssignmentEntity;
+
+  @ManyToOne(() => UserEntity)
+  @JoinColumn({ name: 'reviewer_id' })
+  reviewer!: UserEntity;
+
+  @ManyToOne(() => UserEntity)
+  @JoinColumn({ name: 'reviewee_id' })
+  reviewee!: UserEntity;
+
 }

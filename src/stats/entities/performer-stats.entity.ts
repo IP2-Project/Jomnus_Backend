@@ -4,27 +4,27 @@ import { UserEntity } from "@/users/entity/user.entity";
 @Entity('performer_stats')
 export class PerformerStats {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column({ unique: true })
-  user_id: number;
+  user_id!: number;
 
   @OneToOne(() => UserEntity)
   @JoinColumn({ name: 'user_id' })
-  user: UserEntity;
+  user!: UserEntity;
 
   @Column({ default: 0 })
-  completed_tasks: number;
+  completed_tasks!: number;
 
   @Column('float', { default: 0 })
-  avg_rating: number;
+  avg_rating!: number;
 
   @Column('float', { default: 0 })
-  success_rate: number;
+  success_rate!: number;
 
   @Column('float', { default: 0 })
-  total_earnings: number;
+  total_earnings!: number;
 
   @Column({ nullable: true })
-  response_time: number;
+  response_time!: number;
 }

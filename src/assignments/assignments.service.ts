@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Assignment, AssignmentStatus } from './entities/assignment.entity';
+import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 
 @Injectable()
 export class AssignmentsService {
     constructor(
-        @InjectRepository(Assignment)
-        private assignRepo: Repository<Assignment>,
+        @InjectRepository(TaskAssignmentEntity)
+        private assignRepo: Repository<TaskAssignmentEntity>,
     ) {}
 
     create(taskId: number, performerId: number) {

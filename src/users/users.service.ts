@@ -14,7 +14,7 @@ export class UsersService {
     private statsService: StatsService,
   ) {}
 
-  async findById(id: string): Promise<UserEntity | null> {
+  async findById(id: number): Promise<UserEntity | null> {
     return this.usersRepository.findOne({ where: { id } });
   }
 
@@ -29,9 +29,9 @@ export class UsersService {
   async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
     const user = this.usersRepository.create({
       email: registerDto.email,
-      username: registerDto.username,
       password: registerDto.password,
-      helper: registerDto.helper || 'none',
+      firstName: registerDto.firstName,
+      lastName: registerDto.lastName,
     });
 
     const savedUser = await this.usersRepository.save(user);
@@ -42,14 +42,14 @@ export class UsersService {
     return savedUser;
   }
 
-  async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
+  async updateRefreshToken(userId: number, refreshToken: string): Promise<void> {
     await this.usersRepository.update(userId, {
       refreshToken: refreshToken || null,
     });
   }
 
   async updateOtp(
-    userId: string,
+    userId: number,
     otp: string | null,
     otpExpiry: Date | null,
   ): Promise<void> {
@@ -59,7 +59,7 @@ export class UsersService {
     });
   }
 
-  async updatePassword(userId: string, password: string): Promise<void> {
+  async updatePassword(userId: number, password: string): Promise<void> {
     await this.usersRepository.update(userId, {
       password: password,
     });

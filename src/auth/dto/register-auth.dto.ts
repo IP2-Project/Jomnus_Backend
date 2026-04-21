@@ -14,10 +14,15 @@ export class RegisterAuthDto {
   @IsString()
   email!: string;
 
-  @ApiProperty({ example: 'Username' })
+  @ApiProperty({ example: 'John' })
   @IsNotEmpty()
   @IsString()
-  username!: string;
+  firstName!: string;
+
+  @ApiProperty({ example: 'Doe' })
+  @IsNotEmpty()
+  @IsString()
+  lastName!: string;
 
   @ApiProperty({ example: 'Password must be at least 6 characters long' })
   @IsNotEmpty()
@@ -30,13 +35,4 @@ export class RegisterAuthDto {
   @IsString()
   @MinLength(6)
   confirmPassword!: string;
-
-  @ApiProperty({
-    example: 'none',
-    enum: ['response', 'request', 'none'],
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  helper?: 'response' | 'request' | 'none';
 }

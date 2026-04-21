@@ -50,7 +50,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.data.user = {
         id: Number((payload as any).sub),
         email: (payload as any).email,
-        role: (payload as any).role,
+        // role: (payload as any).role,
+        role: (payload as any).currentRole || (payload as any).role,
       };
     } catch {
       client.disconnect();

@@ -1,12 +1,15 @@
 import { ConversationsModule } from '@/conversations/conversations.module';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MessageEntity } from './entity/messages.entity';
 import { TypeOrmModule } from '@nestjs/typeorm/dist/typeorm.module';
 import { MessageController } from './message.controller';
 import { MessagesService } from './messages.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MessageEntity]), ConversationsModule],
+  imports: [
+    TypeOrmModule.forFeature([MessageEntity]),
+    forwardRef(() => ConversationsModule),
+  ],
   controllers: [MessageController],
   providers: [MessagesService],
   exports: [MessagesService],

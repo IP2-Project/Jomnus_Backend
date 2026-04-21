@@ -6,20 +6,21 @@ import {
   Patch,
   Param,
   Delete,
+  Req,
 } from '@nestjs/common';
 
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
 
 @Controller('tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
   @Post()
-  create(@Body() dto: CreateTaskDto) {
-    const userId = 1;
-    return this.tasksService.create(dto, userId);
+  create(@Body() dto: CreateTaskDto, @Req() req: RequestWithUser) {
+    return this.tasksService.create(dto, req.user.id);
   }
 
   @Get()
@@ -38,8 +39,8 @@ export class TasksController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateTaskDto) {
-    return this.tasksService.update(Number(id), dto);
+  update(@Param('id') id: string, @Body() dto: UpdateTaskDto, @Req() req: RequestWithUser) {
+    return this.tasksService.update(Number(id), dto, req.user);
   }
 
   @Delete(':id')

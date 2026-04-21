@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateProofDto } from './dto/create-proof.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Proof } from './entities/proof.entity';
+import { Proof } from './entities/task-proof.entity';
 
 @Injectable()
 export class ProofsService {
@@ -16,7 +16,9 @@ export class ProofsService {
     return await this.proofRepository.save(proof);
   }
 
-  async getProofsByAssignmentId(assignmentId: string): Promise<Proof[]> {
-    return await this.proofRepository.find({ where: { assignment_id: assignmentId } });
+  async getProofsByAssignmentId(assignmentId: number): Promise<Proof[]> {
+    return this.proofRepository.find({
+      where: { assignment_id: assignmentId },
+    });
   }
 }

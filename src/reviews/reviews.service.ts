@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
@@ -17,14 +17,16 @@ export class ReviewsService {
     });
 
     if (existingReview) {
-      throw new Error('Review for this assignment already exists.');
+      throw new BadRequestException('Review for this assignment already exists.');
     }
 
     const review = this.reviewRepository.create(createReviewDto);
     return await this.reviewRepository.save(review);
   }
 
-  async getReviewsByRevieweeId(revieweeId: string): Promise<Review[]> {
-    return await this.reviewRepository.find({ where: { reviewee_id: revieweeId } });
+  async getReviewsByRevieweeId(revieweeId: number): Promise<Review[]> {
+    return this.reviewRepository.find({
+      where: { reviewee_id: revieweeId },
+    });
   }
 }

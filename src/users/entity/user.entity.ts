@@ -1,83 +1,115 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, OneToOne } from 'typeorm';
+import {
+  BeforeInsert,
+  BeforeUpdate,
+  Column,
+  Entity,
+  OneToOne,
+  OneToMany,
+  JoinColumn,
+} from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
 import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcrypt';
 import { PerformerStats } from '@/stats/entities/performer-stats.entity';
 import { RequesterStats } from '@/stats/entities/requester-stats.entity';
+import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
 
 export enum UserRole {
-  User = 'user',
-  Admin = 'admin',
+  REQUESTER = 'REQUESTER',
+  PERFORMER = 'PERFORMER',
+  ADMIN = 'ADMIN',
 }
 
 @Entity('users')
 export class UserEntity extends BaseEntity {
+  @Column({ name: 'first_name' })
+  firstName!: string;
+
+  @Column({ name: 'last_name' })
+  lastName!: string;
+
   @Column({ unique: true })
   email!: string;
-
-  @Column({ unique: true })
-  username!: string;
-
-  @Column({ default: false })
-  isOnline!: boolean;
-
-  @Column({ nullable: true })
-  firstName?: string;
-
-  @Column({ nullable: true })
-  lastName?: string;
-
-  @Column({ nullable: true })
-  avatar?: string;
-
-  @Column({ nullable: true })
-  position?: string;
 
   @Column()
   @Exclude()
   password!: string;
 
   @Column({ nullable: true })
-  phone?: number;
+  phone?: string;
+
+  @Column({ name: 'profile_image', nullable: true })
+  profileImage?: string;
+
+  @Column({ name: 'phone_verified', default: false })
+  phoneVerified!: boolean;
+
+  @Column({ name: 'is_identity_verified', default: false })
+  isIdentityVerified!: boolean;
+
+  @Column({ name: 'is_verified', default: false })
+  isVerified!: boolean;
+
+  @Column({ name: 'is_performer', default: true })
+  isPerformer!: boolean;
+
+  @Column({
+    name: 'current_role',
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.REQUESTER,
+  })
+  currentRole!: UserRole;
 
   @Column({ nullable: true })
-  address?: string;
-
-  @Column({ nullable: true })
-  gender?: string;
-
-  @Column({ nullable: true })
-  bod?: Date;
-
-  @Column({ nullable: true })
-  country?: string;
+  bio?: string;
 
   @Column({ nullable: true })
   city?: string;
 
   @Column({ nullable: true })
-  zipCode?: string;
+  country?: string;
 
-  @Column({ type: 'enum', enum: ['response', 'request', 'none'] })
-  helper!: 'response' | 'request' | 'none';
+  @Column({ name: 'location_text', nullable: true })
+  locationText?: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'float', nullable: true })
+  latitude?: number;
+
+  @Column({ type: 'float', nullable: true })
+  longitude?: number;
+
+  // ================= AUTH =================
+
+  @Column({ name: 'refresh_token', type: 'text', nullable: true })
   @Exclude()
   refreshToken?: string | null;
-
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.User })
-  role!: UserRole;
-
-  @Column({ default: () => 'CURRENT_TIMESTAMP' })
-  lastLogin!: Date;
 
   @Column({ type: 'varchar', nullable: true })
   @Exclude()
   otp?: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   @Exclude()
   otpExpiry?: Date | null;
+
+  // ================= RELATIONS =================
+
+  @OneToOne(() => PerformerStats, (stats) => stats.user)
+  @JoinColumn()
+  performerStats!: PerformerStats;
+
+  @OneToOne(() => RequesterStats, (stats) => stats.user)
+  @JoinColumn()
+  requesterStats!: RequesterStats;
+
+  @OneToMany(
+    () => IdentityVerificationEntity,
+    (verification) => verification.user,
+  )
+  identityVerifications!: IdentityVerificationEntity[];
+
+  // ================= PASSWORD =================
 
   @BeforeInsert()
   @BeforeUpdate()
@@ -88,14 +120,6 @@ export class UserEntity extends BaseEntity {
   }
 
   async validatePassword(password: string): Promise<boolean> {
-    return await bcrypt.compare(password, this.password);
+    return bcrypt.compare(password, this.password);
   }
-
-  @OneToOne(() => PerformerStats, (stats) => stats.user)
-  performerStats: PerformerStats;
-
-  @OneToOne(() => RequesterStats, (stats) => stats.user)
-  requesterStats: RequesterStats;
-
-
 }

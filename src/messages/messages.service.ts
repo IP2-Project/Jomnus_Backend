@@ -2,14 +2,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MessageEntity } from './entity/messages.entity';
 import { ConversationsService } from '@/conversations/conversations.service';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
 export class MessagesService {
   constructor(
     @InjectRepository(MessageEntity)
     private readonly messageRepository: Repository<MessageEntity>,
-    private readonly conversationsService: ConversationsService,
+    @Inject(forwardRef(() => ConversationsService))
+    private conversationsService: ConversationsService,
   ) {}
 
   async createMessage(senderId: number, conversationId: number, text: string) {

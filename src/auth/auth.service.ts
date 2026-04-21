@@ -65,15 +65,12 @@ export class AuthService {
     }
 
     // Create user with default helper value
-    const user = await this.usersService.create({
-      ...registerDto,
-      helper: 'none', // Set default helper value
-    });
+    const user = await this.usersService.create(registerDto);
     return this.generateTokens(user);
   }
 
   async refreshTokens(
-    userId: string,
+    userId: number,
     refreshToken: string,
   ): Promise<AuthResponseDto> {
     const user = await this.usersService.findById(userId);
@@ -84,7 +81,7 @@ export class AuthService {
   }
 
   async generateTokens(user: UserEntity): Promise<AuthResponseDto> {
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, email: user.email, role: user.currentRole };
 
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
@@ -99,12 +96,12 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName ?? '',
         lastName: user.lastName ?? '',
-        role: user.role,
+        role: user.currentRole,
       },
     };
   }
 
-  async logout(userId: string): Promise<void> {
+  async logout(userId: number): Promise<void> {
     await this.usersService.updateRefreshToken(userId, '');
   }
 
@@ -215,11 +212,9 @@ export class AuthService {
         email: profile.email,
         firstName: profile.firstName,
         lastName: profile.lastName,
-        username: generatedUsername,
         password: randomPassword,
         confirmPassword: randomPassword,
-        helper: 'none',
-      } as any);
+      });
     }
 
     return user;

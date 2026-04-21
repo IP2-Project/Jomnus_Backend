@@ -1,19 +1,24 @@
-import { Column, Entity, ManyToOne, OneToMany, PrimaryColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, PrimaryGeneratedColumn } from 'typeorm';
 import { MessageEntity } from '@/messages/entity/messages.entity';
-import { TasksEntity } from '@/tasks/entity/tasks.entity';
+import { TaskEntity } from '@/tasks/entities/task.entity';
 
 @Entity('conversations')
 export class ConversationsEntity {
-  @PrimaryColumn()
+  // @PrimaryColumn()
+  @PrimaryGeneratedColumn()
   id!: number;
 
   @Column()
   task_id!: number;
 
-  @ManyToOne(() => TasksEntity, (task) => task.conversation, {
+  // @ManyToOne(() => TasksEntity, (task) => task.conversation)
+  // task!: TasksEntity;  
+
+  @JoinColumn({ name: 'task_id' })
+  @ManyToOne(() => TaskEntity, (task) => task.conversations, {
     onDelete: 'CASCADE',
   })
-  task!: TasksEntity;
+  task!: TaskEntity;
 
   @OneToMany(() => MessageEntity, (message) => message.conversation)
   messages!: MessageEntity[];

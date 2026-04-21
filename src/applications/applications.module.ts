@@ -2,15 +2,17 @@ import { Module } from '@nestjs/common';
 import { ApplicationsController } from './applications.controller';
 import { ApplicationsService } from './applications.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Application } from './entities/application.entity';
+import { TaskApplicationEntity } from './entities/task-application.entity';
 import { TasksModule } from '@/tasks/tasks.module';
 import { AssignmentsModule } from '@/assignments/assignments.module';
+import { UsersModule } from '@/users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Application]),
+    TypeOrmModule.forFeature([TaskApplicationEntity]),
     TasksModule,
-    AssignmentsModule
+    AssignmentsModule,
+    UsersModule
   ],
   controllers: [ApplicationsController],
   providers: [ApplicationsService],

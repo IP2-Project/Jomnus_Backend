@@ -8,19 +8,11 @@ export class ReviewsController {
 
   @Post()
   async createReview(@Body() createReviewDto: CreateReviewDto) {
-    try {
-      return await this.reviewsService.createReview(createReviewDto);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+    return this.reviewsService.createReview(createReviewDto);
   }
 
   @Get(':revieweeId')
-  async getReviewsByRevieweeId(@Param('revieweeId') revieweeId: string) {
-    try {
-      return await this.reviewsService.getReviewsByRevieweeId(revieweeId);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+  async getReviewsByRevieweeId(@Param('revieweeId') revieweeId: number) {
+    return this.reviewsService.getReviewsByRevieweeId(Number(revieweeId));
   }
 }

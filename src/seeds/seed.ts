@@ -26,12 +26,10 @@ const seedDatabase = async () => {
     // Create admin user
     const adminUser = userRepository.create({
       email: 'admin@jomnus.com',
-      username: 'admin',
       password: 'JomnusAdmin@12345',
       firstName: 'Admin',
       lastName: 'User',
-      role: UserRole.Admin,
-      helper: 'none',
+      currentRole: UserRole.ADMIN,
     });
 
     await userRepository.save(adminUser);
@@ -41,33 +39,30 @@ const seedDatabase = async () => {
     const users: Partial<UserEntity>[] = [
       {
         email: 'john.doe@jomnus.com',
-        username: 'johndoe',
         password: 'User@123456',
         firstName: 'John',
         lastName: 'Doe',
-        helper: 'response',
         city: 'Phnom Penh',
         country: 'Cambodia',
+        currentRole: UserRole.PERFORMER,
       },
       {
         email: 'jane.smith@jomnus.com',
-        username: 'janesmith',
         password: 'User@123456',
         firstName: 'Jane',
         lastName: 'Smith',
-        helper: 'request',
         city: 'Siem Reap',
         country: 'Cambodia',
+        currentRole: UserRole.REQUESTER,
       },
       {
         email: 'michael.johnson@jomnus.com',
-        username: 'michaeljohnson',
         password: 'User@123456',
         firstName: 'Michael',
         lastName: 'Johnson',
-        helper: 'none',
         city: 'Battambang',
         country: 'Cambodia',
+        currentRole: UserRole.REQUESTER,
       },
     ];
 
@@ -77,10 +72,7 @@ const seedDatabase = async () => {
       });
 
       if (!userExists) {
-        const newUser = userRepository.create({
-          ...userData,
-          role: UserRole.User,
-        });
+        const newUser = userRepository.create(userData);
         await userRepository.save(newUser);
         console.log(`User created: ${userData.email}`);
       }

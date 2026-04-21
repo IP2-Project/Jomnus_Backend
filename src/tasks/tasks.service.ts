@@ -1,18 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Task } from './entities/task.entity';
+import { TaskEntity } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoriesService } from '@/categories/categories.service';
+import { UserEntity, UserRole } from '@/users/entity/user.entity';
 
 @Injectable()
 export class TasksService {
   constructor(
-    @InjectRepository(Task)
-    private taskRepo: Repository<Task>,
+    @InjectRepository(TaskEntity)
+    private taskRepo: Repository<TaskEntity>,
 
     @InjectRepository(TaskCategory)
     private taskCategoryRepo: Repository<TaskCategory>,
@@ -60,8 +61,10 @@ export class TasksService {
       where: { id },
     });
 
-    if (!task) return null;
 
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
     const taskCategories = await this.taskCategoryRepo.find({
       where: { task_id: id },
     });
@@ -84,17 +87,35 @@ export class TasksService {
     });
   }
 
-  update(id: number, dto: UpdateTaskDto) {
-    
-    return this.taskRepo.update(id, {
+  async update(id: number, dto: UpdateTaskDto, user: UserEntity) {
+
+    const task = await this.taskRepo.findOne({ where: { id } });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    if (user.currentRole !== UserRole.ADMIN && task.requester_id !== user.id) {
+      throw new ForbiddenException();
+    }
+
+    await this.taskRepo.update(id, {
       ...dto,
       deadline: dto.deadline ? new Date(dto.deadline) : undefined,
       location_text: dto.locationText,
       required_workers: dto.requiredWorkers,
     });
+
+    return this.findOne(id);
   }
 
-  remove(id: number) {
-    return this.taskRepo.delete(id);
+  async remove(id: number) {
+    const task = await this.taskRepo.findOne({ where: { id } });
+
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+
+    return this.taskRepo.remove(task);
   }
 }

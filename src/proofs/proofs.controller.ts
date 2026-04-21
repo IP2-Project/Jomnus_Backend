@@ -10,17 +10,15 @@ export class ProofsController {
   async submitProof(@Body() createProofDto: CreateProofDto) {
     try {
       return await this.proofsService.submitProof(createProofDto);
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
     }
   }
 
   @Get(':assignmentId')
-  async getProofsByAssignmentId(@Param('assignmentId') assignmentId: string) {
-    try {
-      return await this.proofsService.getProofsByAssignmentId(assignmentId);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+  async getProofsByAssignmentId(
+    @Param('assignmentId') assignmentId: number, 
+  ) {
+    return this.proofsService.getProofsByAssignmentId(Number(assignmentId));
   }
 }

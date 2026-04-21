@@ -6,23 +6,23 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConversationsEntity } from './entity/conversations.entity';
-import { TasksEntity } from '@/tasks/entity/tasks.entity';
-import { task_applicationsEntity } from '@/task_applications/entity/task_applications.entity';
 import { MessageEntity } from '@/messages/entity/messages.entity';
+import { TaskEntity } from '@/tasks/entities/task.entity';
+import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
+import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
-import { task_assignmentEntity } from '@/task_assingment/entity/task-assignment.entity';
 
 @Injectable()
 export class ConversationsService {
   constructor(
     @InjectRepository(ConversationsEntity)
     private readonly conversationRepository: Repository<ConversationsEntity>,
-    @InjectRepository(TasksEntity)
-    private readonly taskRepository: Repository<TasksEntity>,
-    @InjectRepository(task_assignmentEntity)
-    private readonly assignmentRepository: Repository<task_assignmentEntity>,
-    @InjectRepository(task_applicationsEntity)
-    private readonly applicationRepository: Repository<task_applicationsEntity>,
+    @InjectRepository(TaskEntity)
+    private readonly taskRepository: Repository<TaskEntity>,
+    @InjectRepository(TaskAssignmentEntity)
+    private readonly assignmentRepository: Repository<TaskAssignmentEntity>,
+    @InjectRepository(TaskApplicationEntity)
+    private readonly applicationRepository: Repository<TaskApplicationEntity>,
     @InjectRepository(MessageEntity)
     private readonly messageRepository: Repository<MessageEntity>,
   ) {}

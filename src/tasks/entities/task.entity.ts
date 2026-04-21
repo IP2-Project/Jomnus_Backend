@@ -4,7 +4,12 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
 } from 'typeorm';
+import { UserEntity } from '@/users/entity/user.entity';
+import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
 
 export enum TaskStatus {
   POSTED = 'POSTED',
@@ -16,47 +21,58 @@ export enum TaskStatus {
 }
 
 @Entity('tasks')
-export class Task {
+export class TaskEntity {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column()
-  title: string;
+  title!: string;
 
   @Column('text', { nullable: true })
-  description: string;
+  description!: string;
 
   @Column()
-  requester_id: number;
+  requester_id!: number;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'requester_id' })
+  requester!: UserEntity;
 
   @Column('float')
-  price: number;
+  price!: number;
 
   @Column({ type: 'timestamp' })
-  deadline: Date;
+  deadline!: Date;
 
   @Column({ default: 1 })
-  required_workers: number;
+  required_workers!: number;
 
   @Column({
     type: 'enum',
     enum: TaskStatus,
     default: TaskStatus.POSTED,
   })
-  status: TaskStatus;
+  status!: TaskStatus;
 
   @Column({ nullable: true })
-  location_text: string;
+  location_text!: string;
 
   @Column({ type: 'float', nullable: true })
-  latitude: number;
+  latitude!: number;
 
   @Column({ type: 'float', nullable: true })
-  longitude: number;
+  longitude!: number;
 
-  @CreateDateColumn()
-  created_at: Date;
+  // ================= RELATIONS =================
 
-  @UpdateDateColumn()
-  updated_at: Date;
+  @OneToMany(() => ConversationsEntity, (conversation) => conversation.task)
+  conversations!: ConversationsEntity[];
+
+  // ================= TIMESTAMP =================
+
+  @CreateDateColumn({ name: 'created_at' })
+  created_at!: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updated_at!: Date;
 }

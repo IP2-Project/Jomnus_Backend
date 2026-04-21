@@ -1,13 +1,16 @@
-import { IsNotEmpty, IsString, IsEnum, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsEnum, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ProofType } from '../entities/task-proof.entity';
 
 export class CreateProofDto {
   @IsNotEmpty()
-  @IsString()
-  assignment_id: string;
+  @Type(() => Number)
+  @IsNumber()
+  assignment_id!: number;
 
   @IsNotEmpty()
-  @IsEnum(['IMAGE', 'TEXT', 'RECEIPT', 'LOCATION'])
-  type: string;
+  @IsEnum(ProofType)
+  type!: ProofType;
 
   @IsOptional()
   @IsString()
