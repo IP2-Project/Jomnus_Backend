@@ -17,11 +17,11 @@ export class ReviewsService {
     });
 
     if (existingReview) {
-      throw new BadRequestException('Review for this assignment already exists.');
+      throw new Error('Review for this assignment already exists.');
     }
 
     const review = this.reviewRepository.create(createReviewDto);
-    return await this.reviewRepository.save(review);
+    return this.reviewRepository.save(review);
   }
 
   async getReviewsByRevieweeId(revieweeId: number): Promise<Review[]> {

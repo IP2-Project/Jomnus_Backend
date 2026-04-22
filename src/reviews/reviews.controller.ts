@@ -8,7 +8,11 @@ export class ReviewsController {
 
   @Post()
   async createReview(@Body() createReviewDto: CreateReviewDto) {
-    return this.reviewsService.createReview(createReviewDto);
+    try {
+      return this.reviewsService.createReview(createReviewDto);
+    } catch (error: any) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 
   @Get(':revieweeId')
