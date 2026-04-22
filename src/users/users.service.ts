@@ -1,66 +1,44 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity } from '@/users/entity/user.entity';
-import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
-import { StatsService } from '@/stats/stats.service';
+import { UserEntity, UserRole } from './entity/user.entity';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
-export class UsersService {
+export class UserService {
   constructor(
     @InjectRepository(UserEntity)
-    private usersRepository: Repository<UserEntity>,
-
-    private statsService: StatsService,
+    private readonly userRepository: Repository<UserEntity>,
   ) {}
 
-  async findById(id: number): Promise<UserEntity | null> {
-    return this.usersRepository.findOne({ where: { id } });
-  }
-
-  async findByEmail(email: string): Promise<UserEntity | null> {
-    return this.usersRepository.findOne({ where: { email } });
-  }
-
-  async findAll(): Promise<UserEntity[]> {
-    return this.usersRepository.find();
-  }
-
-  async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
-    const user = this.usersRepository.create({
-      email: registerDto.email,
-      password: registerDto.password,
-      fullName: registerDto.fullName
+  async findOne(id: string): Promise<UserEntity> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['performerStats', 'requesterStats'], 
     });
-
-    const savedUser = await this.usersRepository.save(user);
-
-    // Create initial stats for the user
-    await this.statsService.createInitialStats(savedUser);
-
-    return savedUser;
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 
-  async updateRefreshToken(userId: number, refreshToken: string): Promise<void> {
-    await this.usersRepository.update(userId, {
-      refreshToken: refreshToken || null,
-    });
+  async updateMe(id: string, dto: UpdateProfileDto): Promise<UserEntity> {
+    await this.userRepository.update(id, dto);
+    return this.findOne(id);
   }
 
-  async updateOtp(
-    userId: number,
-    otp: string | null,
-    otpExpiry: Date | null,
-  ): Promise<void> {
-    await this.usersRepository.update(userId, {
-      otp: otp,
-      otpExpiry: otpExpiry,
-    });
-  }
+  async switchRole(id: string, newRole: UserRole): Promise<UserEntity> {
+    // Prevent switching to ADMIN via public endpoint
+    if (newRole === UserRole.ADMIN) {
+      throw new ForbiddenException('Admin role cannot be assigned manually');
+    }
 
-  async updatePassword(userId: number, password: string): Promise<void> {
-    await this.usersRepository.update(userId, {
-      password: password,
-    });
+    const user = await this.findOne(id);
+
+    // If switching to Performer, verify they are allowed to perform
+    if (newRole === UserRole.PERFORMER && !user.isPerformer) {
+      throw new ForbiddenException('You have not been approved as a performer');
+    }
+
+    user.currentRole = newRole;
+    return this.userRepository.save(user);
   }
 }
