@@ -12,6 +12,15 @@ import { UserEntity } from '@/users/entity/user.entity';
 
 @Injectable()
 export class ApplicationsService {
+    count() {
+        throw new Error('Method not implemented.');
+    }
+    findAll(query: any) {
+        throw new Error('Method not implemented.');
+    }
+    reject(id: number) {
+        throw new Error('Method not implemented.');
+    }
     constructor(
         @InjectRepository(TaskApplicationEntity)
         private appRepo: Repository<TaskApplicationEntity>,

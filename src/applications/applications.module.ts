@@ -17,4 +17,8 @@ import { UsersModule } from '@/users/users.module';
   controllers: [ApplicationsController],
   providers: [ApplicationsService],
 })
+@Module({
+  providers: [ApplicationsService],
+  exports: [ApplicationsService], // ✅ THIS LINE FIXES EVERYTHING
+})
 export class ApplicationsModule {}

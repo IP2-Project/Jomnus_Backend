@@ -17,4 +17,8 @@ import { ConversationsEntity } from '@/conversations/entity/conversations.entity
     providers: [TasksService],
     exports: [TasksService]
 })
+@Module({
+  providers: [TasksService],
+  exports: [TasksService], 
+})
 export class TasksModule {}

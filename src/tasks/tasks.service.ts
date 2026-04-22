@@ -46,7 +46,7 @@ export class TasksService {
     return task;
   }
 
-  async findAll() {
+  async findAll(query: any) {
     const tasks = await this.taskRepo.find({
       order: { created_at: 'DESC' },
     });
@@ -88,7 +88,6 @@ export class TasksService {
   }
 
   async update(id: number, dto: UpdateTaskDto, user: UserEntity) {
-
     const task = await this.taskRepo.findOne({ where: { id } });
 
     if (!task) {
@@ -99,12 +98,16 @@ export class TasksService {
       throw new ForbiddenException();
     }
 
-    await this.taskRepo.update(id, {
-      ...dto,
-      deadline: dto.deadline ? new Date(dto.deadline) : undefined,
-      location_text: dto.locationText,
-      required_workers: dto.requiredWorkers,
-    });
+    const updateData: any = {};
+
+    if (dto.title !== undefined) updateData.title = dto.title;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.price !== undefined) updateData.price = dto.price;
+    if (dto.deadline !== undefined) updateData.deadline = new Date(dto.deadline);
+    if (dto.requiredWorkers !== undefined) updateData.required_workers = dto.requiredWorkers;
+    if (dto.locationText !== undefined) updateData.location_text = dto.locationText;
+
+    await this.taskRepo.update({ id }, updateData); // <-- use WHERE here
 
     return this.findOne(id);
   }

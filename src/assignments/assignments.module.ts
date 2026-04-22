@@ -11,4 +11,8 @@ import { TaskEntity } from '@/tasks/entities/task.entity';
   providers: [AssignmentsService],
   exports: [AssignmentsService]
 })
+@Module({
+  providers: [AssignmentsService],
+  exports: [AssignmentsService], 
+})
 export class AssignmentsModule {}

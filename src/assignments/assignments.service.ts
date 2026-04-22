@@ -8,6 +8,9 @@ import { TaskEntity } from '@/tasks/entities/task.entity';
 
 @Injectable()
 export class AssignmentsService {
+    findAll(query: any) {
+        throw new Error('Method not implemented.');
+    }
     constructor(
         @InjectRepository(TaskAssignmentEntity)
         private assignRepo: Repository<TaskAssignmentEntity>,
