@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsEnum, IsUrl } from 'class-validator';
-import { UserRole } from './entity/user.entity';
+import { UserRole } from '../entity/user.entity';
 
 export class UpdateProfileDto {
   @IsOptional() @IsString() firstName?: string;

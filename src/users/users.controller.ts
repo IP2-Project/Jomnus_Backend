@@ -1,5 +1,5 @@
 import { Controller, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
-import { UserService } from './users.service';
+import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SwitchRoleDto } from './dto/switch-role.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard'; 
@@ -8,16 +8,16 @@ import { GetUser } from '@/common/decorators/get-user.decorator';
 @Controller('users')
 @UseGuards(JwtAuthGuard) // Protect all endpoints in this module
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
   getMe(@GetUser('id') userId: string) {
-    return this.userService.findOne(userId);
+    return this.usersService.findOne(userId);
   }
 
   @Get(':id')
   getUser(@Param('id') id: string) {
-    return this.userService.findOne(id);
+    return this.usersService.findOne(id);
   }
 
   @Patch('me')
@@ -25,7 +25,7 @@ export class UserController {
     @GetUser('id') userId: string, 
     @Body() updateDto: UpdateProfileDto
   ) {
-    return this.userService.updateMe(userId, updateDto);
+    return this.usersService.updateMe(userId, updateDto);
   }
 
   @Patch('role')
@@ -33,6 +33,6 @@ export class UserController {
     @GetUser('id') userId: string, 
     @Body() switchRoleDto: SwitchRoleDto
   ) {
-    return this.userService.switchRole(userId, switchRoleDto.role);
+    return this.usersService.switchRole(userId, switchRoleDto.role);
   }
 }

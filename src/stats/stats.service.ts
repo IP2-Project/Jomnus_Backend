@@ -18,7 +18,7 @@ export class StatsService {
 
   async getPerformerStats(userId: string): Promise<PerformerStats> {
     const stats = await this.performerRepo.findOne({
-      where: { user: { id: userId } },
+      where: { user: { id: Number(userId) } },
     });
     
     if (!stats) {
@@ -31,7 +31,7 @@ export class StatsService {
 
   async getRequesterStats(userId: string): Promise<RequesterStats> {
     const stats = await this.requesterRepo.findOne({
-      where: { user: { id: userId } },
+      where: { user: { id: Number(userId) } },
     });
 
     if (!stats) {
@@ -42,7 +42,7 @@ export class StatsService {
   }
 
   private async validateUser(userId: string) {
-    const user = await this.userRepo.findOneBy({ id: userId });
+    const user = await this.userRepo.findOneBy({ id: Number(userId) });
     if (!user) throw new NotFoundException('User not found');
   }
 }
