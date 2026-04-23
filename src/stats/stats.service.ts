@@ -16,6 +16,34 @@ export class StatsService {
     private readonly userRepo: Repository<UserEntity>,
   ) {}
 
+  async createDefaultStats(userId: number) {
+    const user = await this.userRepo.findOneBy({ id: userId });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const performer = this.performerRepo.create({
+      user,
+      completed_tasks: 0,
+      avg_rating: 0,
+      success_rate: 0,
+      total_earnings: 0,
+      response_time: 0,
+    });
+
+    const requester = this.requesterRepo.create({
+      user,
+      tasks_posted: 0,
+      tasks_verified: 0,
+      total_spent: 0,
+    });
+
+    await this.performerRepo.save(performer);
+    await this.requesterRepo.save(requester);
+
+    return { performer, requester };
+  }
   async getPerformerStats(userId: string): Promise<PerformerStats> {
     const stats = await this.performerRepo.findOne({
       where: { user: { id: Number(userId) } },

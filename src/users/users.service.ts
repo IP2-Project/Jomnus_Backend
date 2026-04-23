@@ -11,6 +11,7 @@ export class UsersService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+    
   ) {}
 
   // Added findById to satisfy auth.service and jwt.strategy
@@ -20,6 +21,10 @@ export class UsersService {
       relations: ['performerStats', 'requesterStats'],
     });
     if (!user) throw new NotFoundException('User not found');
+
+    // 🔥 CREATE STATS HERE
+    // await this.StatsService.createDefaultStats(user.id);
+
     return user;
   }
 
@@ -74,4 +79,6 @@ export class UsersService {
     user.currentRole = newRole;
     return this.userRepository.save(user);
   }
+
+  
 }

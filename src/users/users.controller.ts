@@ -2,11 +2,11 @@ import { Controller, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SwitchRoleDto } from './dto/switch-role.dto';
-import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard'; 
+// import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard'; 
 import { GetUser } from '@/common/decorators/get-user.decorator';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard) // Protect all endpoints in this module
+// @UseGuards(JwtAuthGuard) // Protect all endpoints in this module
 export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
