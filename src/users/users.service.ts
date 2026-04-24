@@ -1,10 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity, UserRole } from './entity/user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 // Ensure you import your RegisterDto or CreateUserDto here
-// import { RegisterDto } from '../auth/dto/register.dto'; 
 
 @Injectable()
 export class UsersService {

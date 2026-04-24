@@ -9,7 +9,7 @@ import { StatsService } from './stats.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 
 @Controller('stats')
-// @UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
