@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PerformerStats } from './entities/performer-stats.entity';
@@ -24,7 +24,7 @@ export class StatsService {
     }
 
     const performer = this.performerRepo.create({
-      user,
+      user: user,
       completed_tasks: 0,
       avg_rating: 0,
       success_rate: 0,
@@ -33,7 +33,7 @@ export class StatsService {
     });
 
     const requester = this.requesterRepo.create({
-      user,
+      user: user,
       tasks_posted: 0,
       tasks_verified: 0,
       total_spent: 0,
@@ -47,25 +47,38 @@ export class StatsService {
   async getPerformerStats(userId: string): Promise<PerformerStats> {
     const stats = await this.performerRepo.findOne({
       where: { user: { id: Number(userId) } },
+      relations: ['user'], // Load the user to check the role
     });
     
     if (!stats) {
-      // Check if user exists to provide a better error message
       await this.validateUser(userId);
-      throw new NotFoundException('Performer statistics not found for this user');
+      throw new NotFoundException('Stats not found');
     }
+
+    // CHECK ROLE HERE
+    if (stats.user.currentRole !== 'PERFORMER') {
+      throw new ForbiddenException('User is not currently a Performer');
+    }
+
     return stats;
   }
 
   async getRequesterStats(userId: string): Promise<RequesterStats> {
     const stats = await this.requesterRepo.findOne({
       where: { user: { id: Number(userId) } },
+      relations: ['user'], // We need this to see the currentRole
     });
 
     if (!stats) {
       await this.validateUser(userId);
-      throw new NotFoundException('Requester statistics not found for this user');
+      throw new NotFoundException('Requester statistics not found');
     }
+
+    // Add this logic to block the wrong role:
+    if (stats.user.currentRole !== 'REQUESTER') {
+      throw new ForbiddenException('User is not currently a Requester');
+    }
+
     return stats;
   }
 
@@ -73,4 +86,5 @@ export class StatsService {
     const user = await this.userRepo.findOneBy({ id: Number(userId) });
     if (!user) throw new NotFoundException('User not found');
   }
+  
 }
