@@ -181,9 +181,8 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    // Redirect to frontend with tokens in query parameters or session
     return res.redirect(
-      `http://localhost:3000/dashboard?token=${session.accessToken}`,
+      `http://localhost:3000/auth/callback?token=${session.accessToken}`,
     );
   }
 
