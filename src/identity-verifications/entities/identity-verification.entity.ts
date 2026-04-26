@@ -45,8 +45,8 @@ export class IdentityVerificationEntity {
   })
   status!: VerificationStatus;
 
-  @Column({ type: 'text', nullable: true })
-  rejection_reason?: string;
+ @Column({ type: 'text', nullable: true })
+rejection_reason?: string | null; // This allows the 'null' update
 
   // ================= REVIEW =================
 
