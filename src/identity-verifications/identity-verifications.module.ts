@@ -4,11 +4,12 @@ import { IdentityVerificationEntity } from './entities/identity-verification.ent
 import { UserEntity } from '@/users/entity/user.entity';
 import { IdentityVerificationsService } from './identity-verifications.service';
 import { IdentityVerificationsController } from './identity-verifications.controller';
+import { NotificationsModule } from '../notifications/notifications.module'; // 👈 Adjust path as needed
 
 @Module({
   imports: [
-    // This connects the Database tables
     TypeOrmModule.forFeature([IdentityVerificationEntity, UserEntity]),
+    NotificationsModule, // 👈 Added this to allow cross-module communication
   ],
   controllers: [IdentityVerificationsController],
   providers: [IdentityVerificationsService],

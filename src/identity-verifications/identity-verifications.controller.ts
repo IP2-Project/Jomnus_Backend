@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, ParseIntPipe, Request, UseGuards, ForbiddenException, Logger } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, ParseIntPipe, Request, UseGuards, ForbiddenException, Logger } from '@nestjs/common';
 import { IdentityVerificationsService } from './identity-verifications.service';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.auth.guard';
@@ -9,16 +9,34 @@ export class IdentityVerificationsController {
 
   constructor(private readonly service: IdentityVerificationsService) {}
 
-  // --- ADDED: Get all pending verifications ---
+  // --- NEW: Dashboard Statistics (Aligns with Figma Stats) ---
+  @UseGuards(JwtAuthGuard)
+  @Get('dashboard-stats')
+  async getStats(@Request() req) {
+    const userRole = req.user?.currentRole || req.user?.role || req.user?.current_role;
+    if (userRole !== 'ADMIN') {
+      throw new ForbiddenException(`Access denied. Admin privileges required.`);
+    }
+    return this.service.getAdminStats();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post()
+  async create(
+    @Request() req,
+    @Body() dto: { id_card_url: string; selfie_url: string }
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    return this.service.create(userId, dto);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('pending')
   async findAllPending(@Request() req) {
     const userRole = req.user?.currentRole || req.user?.role || req.user?.current_role;
-
     if (userRole !== 'ADMIN') {
       throw new ForbiddenException(`Access denied. Admin privileges required.`);
     }
-
     return this.service.getPendingList();
   }
 
@@ -29,8 +47,6 @@ export class IdentityVerificationsController {
     @Body() dto: ReviewVerificationDto,
     @Request() req,
   ) {
-    this.logger.log(`Request user object: ${JSON.stringify(req.user)}`);
-
     const userRole = req.user?.currentRole || req.user?.role || req.user?.current_role;
 
     if (userRole !== 'ADMIN') {
@@ -40,7 +56,6 @@ export class IdentityVerificationsController {
     }
 
     const adminId = req.user?.id || req.user?.sub;
-
     return this.service.review(id, adminId, dto);
   }
 }
