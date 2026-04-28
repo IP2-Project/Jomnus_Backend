@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { 
+  Injectable, 
+  NotFoundException, 
+  BadRequestException, 
+  ForbiddenException 
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm'; // Added MoreThanOrEqual
+import { Repository, MoreThanOrEqual } from 'typeorm';
 import { IdentityVerificationEntity, VerificationStatus } from './entities/identity-verification.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import * as fs from 'fs/promises'; 
+import * as path from 'path';
 
 @Injectable()
 export class IdentityVerificationsService {
@@ -16,23 +23,49 @@ export class IdentityVerificationsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  // --- NEW: Dashboard Stats Logic ---
+  async getPaginatedList(page: number, limit: number, search?: string) {
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.verificationRepo.createQueryBuilder('verification')
+      .leftJoinAndSelect('verification.user', 'user')
+      .leftJoinAndSelect('verification.reviewer', 'reviewer')
+      .orderBy('verification.created_at', 'DESC');
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.fullName ILIKE :search OR user.email ILIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    const [data, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemCount: data.length,
+        itemsPerPage: Number(limit),
+        totalPages: Math.ceil(total / limit),
+        currentPage: Number(page),
+      },
+    };
+  }
+
   async getAdminStats() {
-    // 1. Total Pending (for the "12 Pending Reviews" badge)
     const totalPending = await this.verificationRepo.count({
       where: { status: VerificationStatus.PENDING },
     });
 
-    // 2. Processed Today (for the "45 processed today" stat)
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const processedToday = await this.verificationRepo.count({
-      where: {
-        reviewed_at: MoreThanOrEqual(startOfToday),
-      },
+      where: { reviewed_at: MoreThanOrEqual(startOfToday) },
     });
 
-    // 3. Recent Activity (for the right sidebar in Figma)
     const recentActivity = await this.verificationRepo.find({
       where: [
         { status: VerificationStatus.APPROVED },
@@ -40,24 +73,39 @@ export class IdentityVerificationsService {
       ],
       order: { reviewed_at: 'DESC' },
       take: 5,
-      relations: ['user'],
+      relations: ['user', 'reviewer'],
     });
 
     return { totalPending, processedToday, recentActivity };
   }
 
   async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
-    const existingPending = await this.verificationRepo.findOne({
-      where: {
-        user_id: userId,
-        status: VerificationStatus.PENDING
-      },
+    let verification = await this.verificationRepo.findOne({
+      where: { user_id: userId },
     });
 
-    if (existingPending) {
+    // Security Logic: Block if already APPROVED
+    if (verification && verification.status === VerificationStatus.APPROVED) {
+      throw new ForbiddenException(
+        'Your identity is already verified. Changes are not allowed.'
+      );
+    }
+
+    // Block if already PENDING
+    if (verification && verification.status === VerificationStatus.PENDING) {
       throw new BadRequestException('You already have a verification request pending review.');
     }
 
+    // If record exists (was REJECTED), update it
+    if (verification) {
+      verification.id_card_url = dto.id_card_url;
+      verification.selfie_url = dto.selfie_url;
+      verification.status = VerificationStatus.PENDING;
+      verification.rejection_reason = null;
+      return await this.verificationRepo.save(verification);
+    }
+
+    // Otherwise, create brand new row
     const newRequest = this.verificationRepo.create({
       user_id: userId,
       id_card_url: dto.id_card_url,
@@ -66,14 +114,6 @@ export class IdentityVerificationsService {
     });
 
     return await this.verificationRepo.save(newRequest);
-  }
-
-  async getPendingList() {
-    return await this.verificationRepo.find({
-      where: { status: VerificationStatus.PENDING },
-      relations: ['user'],
-      order: { created_at: 'ASC' },
-    });
   }
 
   async review(id: number, adminId: number, dto: ReviewVerificationDto) {
@@ -87,15 +127,43 @@ export class IdentityVerificationsService {
       throw new BadRequestException('A rejection reason must be provided when rejecting.');
     }
 
+    // --- SMART FILE CLEANUP LOGIC ---
+    if (dto.status === VerificationStatus.REJECTED) {
+      const files = [verification.id_card_url, verification.selfie_url];
+      
+      for (const fileUrlOrPath of files) {
+        if (fileUrlOrPath) {
+          let cleanPath = fileUrlOrPath;
+
+          // Handle Scenario B: If it's a URL, extract the path part
+          if (fileUrlOrPath.startsWith('http')) {
+            const urlParts = fileUrlOrPath.split('/');
+            // This takes everything after the host (e.g., "uploads/file.jpg")
+            cleanPath = urlParts.slice(3).join('/'); 
+          }
+
+          try {
+            // resolve builds the path from the project root
+            const absolutePath = path.resolve(cleanPath);
+            await fs.unlink(absolutePath);
+            console.log(`Successfully deleted obsolete file: ${absolutePath}`);
+          } catch (err: any) {
+            // Log a warning if file is missing, but don't stop the review process
+            console.warn(`Cleanup skipped for ${cleanPath}: ${err.message}`);
+          }
+        }
+      }
+      
+      // Clear the URLs in DB so the user can re-upload fresh files
+      verification.id_card_url = null;
+      verification.selfie_url = null;
+    }
+    // --------------------------------
+
     verification.status = dto.status;
     verification.reviewed_by = adminId;
     verification.reviewed_at = new Date();
-
-    if (dto.status === VerificationStatus.REJECTED) {
-      verification.rejection_reason = dto.rejection_reason;
-    } else {
-      verification.rejection_reason = null;
-    }
+    verification.rejection_reason = dto.status === VerificationStatus.REJECTED ? dto.rejection_reason : null;
 
     await this.verificationRepo.save(verification);
 
@@ -104,13 +172,12 @@ export class IdentityVerificationsService {
     });
 
     const isApproved = dto.status === VerificationStatus.APPROVED;
-
     await this.notificationsService.createNotification({
       user_id: user.id,
       audience: 'user',
       title: isApproved ? 'Identity Verified' : 'Identity Verification Rejected',
-      message: isApproved
-        ? 'Great news! Your identity has been successfully verified.'
+      message: isApproved 
+        ? 'Great news! Your identity has been successfully verified.' 
         : `Verification failed. Reason: ${dto.rejection_reason}`,
       type: isApproved ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
     });

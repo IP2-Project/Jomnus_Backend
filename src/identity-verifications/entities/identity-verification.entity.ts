@@ -21,7 +21,7 @@ export class IdentityVerificationEntity {
 
   // ================= USER =================
 
-  @Column()
+  @Column({ unique: true }) // Ensures one user only has one verification record
   user_id!: number;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
@@ -30,11 +30,12 @@ export class IdentityVerificationEntity {
 
   // ================= FILES =================
 
-  @Column()
-  id_card_url!: string;
+// Add type: 'varchar' explicitly here
+  @Column({ type: 'varchar', nullable: true })
+  id_card_url!: string | null;
 
-  @Column()
-  selfie_url!: string;
+  @Column({ type: 'varchar', nullable: true })
+  selfie_url!: string | null;
 
   // ================= STATUS =================
 
@@ -45,8 +46,8 @@ export class IdentityVerificationEntity {
   })
   status!: VerificationStatus;
 
- @Column({ type: 'text', nullable: true })
-rejection_reason?: string | null; // This allows the 'null' update
+  @Column({ type: 'text', nullable: true })
+  rejection_reason?: string | null;
 
   // ================= REVIEW =================
 
