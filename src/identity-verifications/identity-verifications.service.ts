@@ -84,19 +84,32 @@ export class IdentityVerificationsService {
       where: { user_id: userId },
     });
 
-    // Security Logic: Block if already APPROVED
+    // --- HELPER: Delete files if request is blocked ---
+    const cleanupFiles = async () => {
+      try {
+        if (dto.id_card_url) await fs.unlink(path.resolve(dto.id_card_url));
+        if (dto.selfie_url) await fs.unlink(path.resolve(dto.selfie_url));
+        console.log('Cleanup: Deleted files from blocked/duplicate request.');
+      } catch (err: any) {
+        console.warn(`Cleanup skipped: ${err.message}`);
+      }
+    };
+
+    // 1. Block if already APPROVED
     if (verification && verification.status === VerificationStatus.APPROVED) {
+      await cleanupFiles();
       throw new ForbiddenException(
         'Your identity is already verified. Changes are not allowed.'
       );
     }
 
-    // Block if already PENDING
+    // 2. Block if already PENDING
     if (verification && verification.status === VerificationStatus.PENDING) {
+      await cleanupFiles();
       throw new BadRequestException('You already have a verification request pending review.');
     }
 
-    // If record exists (was REJECTED), update it
+    // 3. If record exists (was REJECTED), update it
     if (verification) {
       verification.id_card_url = dto.id_card_url;
       verification.selfie_url = dto.selfie_url;
@@ -105,7 +118,7 @@ export class IdentityVerificationsService {
       return await this.verificationRepo.save(verification);
     }
 
-    // Otherwise, create brand new row
+    // 4. Otherwise, create brand new row
     const newRequest = this.verificationRepo.create({
       user_id: userId,
       id_card_url: dto.id_card_url,
@@ -127,7 +140,7 @@ export class IdentityVerificationsService {
       throw new BadRequestException('A rejection reason must be provided when rejecting.');
     }
 
-    // --- SMART FILE CLEANUP LOGIC ---
+    // --- REJECTION CLEANUP ---
     if (dto.status === VerificationStatus.REJECTED) {
       const files = [verification.id_card_url, verification.selfie_url];
       
@@ -135,30 +148,24 @@ export class IdentityVerificationsService {
         if (fileUrlOrPath) {
           let cleanPath = fileUrlOrPath;
 
-          // Handle Scenario B: If it's a URL, extract the path part
           if (fileUrlOrPath.startsWith('http')) {
             const urlParts = fileUrlOrPath.split('/');
-            // This takes everything after the host (e.g., "uploads/file.jpg")
             cleanPath = urlParts.slice(3).join('/'); 
           }
 
           try {
-            // resolve builds the path from the project root
             const absolutePath = path.resolve(cleanPath);
             await fs.unlink(absolutePath);
             console.log(`Successfully deleted obsolete file: ${absolutePath}`);
           } catch (err: any) {
-            // Log a warning if file is missing, but don't stop the review process
             console.warn(`Cleanup skipped for ${cleanPath}: ${err.message}`);
           }
         }
       }
       
-      // Clear the URLs in DB so the user can re-upload fresh files
       verification.id_card_url = null;
       verification.selfie_url = null;
     }
-    // --------------------------------
 
     verification.status = dto.status;
     verification.reviewed_by = adminId;
