@@ -58,6 +58,9 @@ export class UserEntity extends BaseEntity {
   })
   currentRole!: UserRole;
 
+  @Column({ default: 'active' }) // For Active/Banned status
+  status!: string;
+
   @Column({ nullable: true })
   bio?: string;
 
@@ -76,8 +79,6 @@ export class UserEntity extends BaseEntity {
   @Column({ type: 'float', nullable: true })
   longitude?: number;
 
-  // ================= AUTH =================
-
   @Column({ name: 'refresh_token', type: 'text', nullable: true })
   @Exclude()
   refreshToken?: string | null;
@@ -89,8 +90,6 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   @Exclude()
   otpExpiry?: Date | null;
-
-  // ================= RELATIONS =================
 
   @OneToOne(() => PerformerStats, (stats) => stats.user)
   @JoinColumn()
@@ -105,8 +104,6 @@ export class UserEntity extends BaseEntity {
     (verification) => verification.user,
   )
   identityVerifications!: IdentityVerificationEntity[];
-
-  // ================= PASSWORD =================
 
   @BeforeInsert()
   @BeforeUpdate()
