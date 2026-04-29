@@ -1,29 +1,90 @@
-import { Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-
-import { PerformerStats } from "./entities/performer-stats.entity";
-import { RequesterStats } from "./entities/requester-stats.entity";
-import { UserEntity } from "@/users/entity/user.entity";
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { PerformerStats } from './entities/performer-stats.entity';
+import { RequesterStats } from './entities/requester-stats.entity';
+import { UserEntity } from '@/users/entity/user.entity';
 
 @Injectable()
 export class StatsService {
   constructor(
     @InjectRepository(PerformerStats)
-    private performerRepo: Repository<PerformerStats>,
-
+    private readonly performerRepo: Repository<PerformerStats>,
     @InjectRepository(RequesterStats)
-    private requesterRepo: Repository<RequesterStats>,
+    private readonly requesterRepo: Repository<RequesterStats>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
   ) {}
 
-  async createInitialStats(user: UserEntity) {
-    await Promise.all([
-      this.performerRepo.save({
-        user_id: Number(user.id),
-      }),
-      this.requesterRepo.save({
-        user_id: Number(user.id),
-      }),
-    ]);
+  async createDefaultStats(userId: number) {
+    const user = await this.userRepo.findOneBy({ id: userId });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const performer = this.performerRepo.create({
+      user: user,
+      completed_tasks: 0,
+      avg_rating: 0,
+      success_rate: 0,
+      total_earnings: 0,
+      response_time: 0,
+    });
+
+    const requester = this.requesterRepo.create({
+      user: user,
+      tasks_posted: 0,
+      tasks_verified: 0,
+      total_spent: 0,
+    });
+
+    await this.performerRepo.save(performer);
+    await this.requesterRepo.save(requester);
+
+    return { performer, requester };
   }
+  async getPerformerStats(userId: string): Promise<PerformerStats> {
+    const stats = await this.performerRepo.findOne({
+      where: { user: { id: Number(userId) } },
+      relations: ['user'], // Load the user to check the role
+    });
+    
+    if (!stats) {
+      await this.validateUser(userId);
+      throw new NotFoundException('Stats not found');
+    }
+
+    // CHECK ROLE HERE
+    if (stats.user.currentRole !== 'PERFORMER') {
+      throw new ForbiddenException('User is not currently a Performer');
+    }
+
+    return stats;
+  }
+
+  async getRequesterStats(userId: string): Promise<RequesterStats> {
+    const stats = await this.requesterRepo.findOne({
+      where: { user: { id: Number(userId) } },
+      relations: ['user'], // We need this to see the currentRole
+    });
+
+    if (!stats) {
+      await this.validateUser(userId);
+      throw new NotFoundException('Requester statistics not found');
+    }
+
+    // Add this logic to block the wrong role:
+    if (stats.user.currentRole !== 'REQUESTER') {
+      throw new ForbiddenException('User is not currently a Requester');
+    }
+
+    return stats;
+  }
+
+  private async validateUser(userId: string) {
+    const user = await this.userRepo.findOneBy({ id: Number(userId) });
+    if (!user) throw new NotFoundException('User not found');
+  }
+  
 }

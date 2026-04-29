@@ -1,66 +1,83 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity } from '@/users/entity/user.entity';
-import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
-import { StatsService } from '@/stats/stats.service';
+import { UserEntity, UserRole } from './entity/user.entity';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+// Ensure you import your RegisterDto or CreateUserDto here
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(UserEntity)
-    private usersRepository: Repository<UserEntity>,
-
-    private statsService: StatsService,
+    private readonly userRepository: Repository<UserEntity>,
+    
   ) {}
 
-  async findById(id: number): Promise<UserEntity | null> {
-    return this.usersRepository.findOne({ where: { id } });
+  // Added findById to satisfy auth.service and jwt.strategy
+  async findById(id: number | string): Promise<UserEntity> {
+    const user = await this.userRepository.findOne({
+      where: { id: Number(id) },
+      relations: ['performerStats', 'requesterStats'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    // 🔥 CREATE STATS HERE
+    // await this.StatsService.createDefaultStats(user.id);
+
+    return user;
   }
 
+  // Added findByEmail to satisfy auth.service
   async findByEmail(email: string): Promise<UserEntity | null> {
-    return this.usersRepository.findOne({ where: { email } });
+    return await this.userRepository.findOne({ where: { email } });
   }
 
-  async findAll(): Promise<UserEntity[]> {
-    return this.usersRepository.find();
+  // Added create to satisfy auth.service registration and Google login
+  async create(userData: Partial<UserEntity>): Promise<UserEntity> {
+    const newUser = this.userRepository.create(userData);
+    return await this.userRepository.save(newUser);
   }
 
-  async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
-    const user = this.usersRepository.create({
-      email: registerDto.email,
-      password: registerDto.password,
-      fullName: registerDto.fullName
-    });
-
-    const savedUser = await this.usersRepository.save(user);
-
-    // Create initial stats for the user
-    await this.statsService.createInitialStats(savedUser);
-
-    return savedUser;
+  // Added updateRefreshToken for login/logout flow
+  async updateRefreshToken(id: number | string, refreshToken: string): Promise<void> {
+    await this.userRepository.update(id, { refreshToken });
   }
 
-  async updateRefreshToken(userId: number, refreshToken: string): Promise<void> {
-    await this.usersRepository.update(userId, {
-      refreshToken: refreshToken || null,
-    });
+  // Added updateOtp for forgot password flow
+  async updateOtp(id: number | string, otp: string | null, otpExpiry: Date | null): Promise<void> {
+    await this.userRepository.update(id, { otp, otpExpiry });
   }
 
-  async updateOtp(
-    userId: number,
-    otp: string | null,
-    otpExpiry: Date | null,
-  ): Promise<void> {
-    await this.usersRepository.update(userId, {
-      otp: otp,
-      otpExpiry: otpExpiry,
-    });
+  // Added updatePassword for reset password flow
+  async updatePassword(id: number | string, password: string): Promise<void> {
+    // In a real app, ensure the password is hashed before it reaches here 
+    // or use a BeforeUpdate hook in the entity
+    await this.userRepository.update(id, { password });
   }
 
-  async updatePassword(userId: number, password: string): Promise<void> {
-    await this.usersRepository.update(userId, {
-      password: password,
-    });
+  async findOne(id: string): Promise<UserEntity> {
+    return this.findById(id);
   }
+
+  async updateMe(id: string, dto: UpdateProfileDto): Promise<UserEntity> {
+    await this.userRepository.update(id, dto);
+    return this.findById(id);
+  }
+
+  async switchRole(id: string, newRole: UserRole): Promise<UserEntity> {
+    if (newRole === UserRole.ADMIN) {
+      throw new ForbiddenException('Admin role cannot be assigned manually');
+    }
+
+    const user = await this.findById(id);
+
+    if (newRole === UserRole.PERFORMER && !user.isPerformer) {
+      throw new ForbiddenException('You have not been approved as a performer');
+    }
+
+    user.currentRole = newRole;
+    return this.userRepository.save(user);
+  }
+
+  
 }
