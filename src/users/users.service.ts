@@ -50,9 +50,9 @@ export class UsersService {
 
   // Added updatePassword for reset password flow
   async updatePassword(id: number | string, password: string): Promise<void> {
-    // In a real app, ensure the password is hashed before it reaches here 
-    // or use a BeforeUpdate hook in the entity
-    await this.userRepository.update(id, { password });
+    const user = await this.findById(id);
+    user.password = password;
+    await this.userRepository.save(user);
   }
 
   async findOne(id: string): Promise<UserEntity> {
