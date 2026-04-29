@@ -1,3 +1,4 @@
+
 import { Controller, Post, Get, Body, Param, HttpException, HttpStatus, Patch, UseGuards } from '@nestjs/common';
 import { ProofsService } from './proofs.service';
 import { CreateProofDto } from './dto/create-proof.dto';
@@ -18,6 +19,11 @@ export class ProofsController {
     }
   }
 
+  @Get()
+  async getAllProofs() {
+    return this.proofsService.getAllProofs();
+  }
+
   @Get(':assignmentId')
   async getProofsByAssignmentId(@Param('assignmentId') assignmentId: number) {
     return this.proofsService.getProofsByAssignmentId(Number(assignmentId));
@@ -33,3 +39,4 @@ export class ProofsController {
     return this.proofsService.updateProofStatus(id, ProofStatus.REJECTED);
   }
 }
+

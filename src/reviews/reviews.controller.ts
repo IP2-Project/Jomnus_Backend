@@ -1,3 +1,4 @@
+
 import {
   Controller,
   Post,
@@ -7,6 +8,8 @@ import {
   HttpException,
   HttpStatus,
   UseGuards,
+  ParseIntPipe,
+  Patch,
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -20,14 +23,39 @@ export class ReviewsController {
   @Post()
   async createReview(@Body() createReviewDto: CreateReviewDto) {
     try {
-      return this.reviewsService.createReview(createReviewDto);
+      return await this.reviewsService.createReview(createReviewDto);
     } catch (error: any) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        error.message || 'Failed to create review',
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 
+  @Get()
+  async getAllReviews() {
+    return this.reviewsService.getAllReviews();
+  }
+
   @Get(':revieweeId')
-  async getReviewsByRevieweeId(@Param('revieweeId') revieweeId: number) {
-    return this.reviewsService.getReviewsByRevieweeId(Number(revieweeId));
+  async getReviewsByRevieweeId(
+    @Param('revieweeId', ParseIntPipe) revieweeId: number,
+  ) {
+    return this.reviewsService.getReviewsByRevieweeId(revieweeId);
+  }
+
+  @Patch(':id')
+  async updateReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateData: Partial<CreateReviewDto>,
+  ) {
+    try {
+      return await this.reviewsService.updateReview(id, updateData);
+    } catch (error: any) {
+      throw new HttpException(
+        error.message || 'Failed to update review',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
 }
