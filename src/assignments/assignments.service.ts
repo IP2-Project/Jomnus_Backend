@@ -33,11 +33,38 @@ export class AssignmentsService {
     }
 
 
-    findByUser(userId: number) {
-        return this.assignRepo.find({
-            where: { performer_id: userId },
-        });
-    }    
+  async findByUser(userId: number) {
+    const assignments = await this.assignRepo.find({
+      where: { performer_id: userId },
+      relations: ['task', 'task.requester'],
+      order: { created_at: 'DESC' },
+    });
+
+    return assignments.map((a) => ({
+      assignmentId: a.id,
+      status: a.status,
+      acceptedPrice: a.accepted_price,
+
+      task: a.task
+        ? {
+          id: a.task.id,
+          title: a.task.title,
+          description: a.task.description,
+          price: a.task.price,
+          deadline: a.task.deadline,
+          locationText: a.task.location_text,
+        }
+        : null,
+
+      requester: a.task?.requester
+        ? {
+          id: a.task.requester.id,
+          fullName: a.task.requester.fullName,
+          profileImage: a.task.requester.profileImage,
+        }
+        : null,
+    }));
+  }
 
     async completeAssignment(id: number, user: UserEntity) {
         const assignment = await this.assignRepo.findOne({

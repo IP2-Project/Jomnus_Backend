@@ -1,8 +1,10 @@
+
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CreateProofDto } from './dto/create-proof.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Proof, ProofStatus } from './entities/task-proof.entity';
+// import { Review } from '@/reviews/entities/review.entity';
 
 @Injectable()
 export class ProofsService {
@@ -30,4 +32,13 @@ export class ProofsService {
     proof.status = status;
     return this.proofRepository.save(proof);
   }
+
+  async getAllProofs(): Promise<Proof[]> {
+    return this.proofRepository.find({
+      order: {
+        created_at: 'DESC',
+      },
+    });
+  }
+
 }
