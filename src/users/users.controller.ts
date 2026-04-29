@@ -1,9 +1,10 @@
-import { Controller, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Body, Param, UseGuards, Post, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SwitchRoleDto } from './dto/switch-role.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard'; 
 import { GetUser } from '@/common/decorators/get-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard) // Protect all endpoints in this module
@@ -26,6 +27,14 @@ export class UserController {
     @Body() updateDto: UpdateProfileDto
   ) {
     return this.usersService.updateMe(userId, updateDto);
+  }
+
+  @Post('upload-avatar')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(@UploadedFile() file: any) {
+    return {
+      url: `/uploads/${file.filename}`, // or cloud URL
+    };
   }
 
   @Patch('role')

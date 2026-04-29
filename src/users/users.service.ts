@@ -59,11 +59,32 @@ export class UsersService {
     return this.findById(id);
   }
 
-  async updateMe(id: string, dto: UpdateProfileDto): Promise<UserEntity> {
-    await this.userRepository.update(id, dto);
-    return this.findById(id);
+  // async updateMe(id: string, dto: UpdateProfileDto): Promise<UserEntity> {
+  //   await this.userRepository.update(id, dto);
+  //   return this.findById(id);
+  // }
+
+  async updateMe(userId: string, dto: UpdateProfileDto) {
+  const user = await this.userRepository.findOneBy({ id: Number(userId) });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
   }
 
+  // Update only allowed fields
+  if (dto.fullName !== undefined) user.fullName = dto.fullName;
+  if (dto.phone !== undefined) user.phone = dto.phone;
+  if (dto.bio !== undefined) user.bio = dto.bio;
+  if (dto.city !== undefined) user.city = dto.city;
+  if (dto.country !== undefined) user.country = dto.country;
+
+  // IMPORTANT: profileImage must already be URL
+  if (dto.profileImage !== undefined) {
+    user.profileImage = dto.profileImage;
+  }
+
+  return this.userRepository.save(user);
+}
   async switchRole(id: string, newRole: UserRole): Promise<UserEntity> {
     if (newRole === UserRole.ADMIN) {
       throw new ForbiddenException('Admin role cannot be assigned manually');
