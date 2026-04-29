@@ -30,7 +30,6 @@ export class UsersService {
     const { page = 1, limit = 10, role, verified, status, search } = query;
     const skip = (page - 1) * limit;
 
-    // TypeORM QueryBuilder automatically handles Soft Delete (deletedAt IS NULL)
     const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
     if (role && role !== 'ALL') {
@@ -89,7 +88,6 @@ export class UsersService {
     return { pendingVerifications, totalUsers };
   }
 
-  // LOGIC 3: Manual Verify with History Sync
   async manualVerify(id: number) {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
@@ -97,15 +95,11 @@ export class UsersService {
     user.isIdentityVerified = true;
     user.status = 'active';
 
-    // Sync History: Update latest document to APPROVED
     if (user.identityVerifications && user.identityVerifications.length > 0) {
       const latestDoc = user.identityVerifications[0]; 
       latestDoc.status = 'APPROVED' as any;
       await this.verificationRepository.save(latestDoc);
     }
-
-    // LOGIC 2: Notification Placeholder
-    // await this.notificationService.notify(id, 'Your account is verified.');
 
     return await this.usersRepository.save(user);
   }
@@ -121,6 +115,9 @@ export class UsersService {
     if (adminId && userId === adminId && newRole !== UserRole.ADMIN) {
       throw new BadRequestException('You cannot remove your own Admin role.');
     }
+    
+    // AUDIT LOG: Track who changed the role
+    console.log(`[AUDIT] Admin ${adminId} changed User ${userId} role to ${newRole}`);
     
     targetUser.currentRole = newRole;
     if (newRole === UserRole.ADMIN) targetUser.isIdentityVerified = true;
@@ -138,18 +135,25 @@ export class UsersService {
     
     user.status = status;
 
-    // LOGIC 2: Notification Placeholder
-    // await this.notificationService.notify(id, `Account status changed to ${status}`);
+    // SESSION KILL & AUDIT: If banned, clear refresh token to force instant logout
+    if (status === 'banned') {
+      user.refreshToken = null;
+      console.log(`[AUDIT] User ${id} banned and session killed by Admin ${adminId}`);
+    } else {
+      console.log(`[AUDIT] User ${id} status updated to ${status} by Admin ${adminId}`);
+    }
 
     return await this.usersRepository.save(user);
   }
 
-  // LOGIC 1: Soft Delete Method
   async softRemove(id: number, adminId: number) {
     if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
     
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
+
+    // AUDIT LOG: Track deletion
+    console.log(`[AUDIT] User ${id} soft-deleted by Admin ${adminId}`);
 
     return await this.usersRepository.softDelete(id);
   }
@@ -158,7 +162,7 @@ export class UsersService {
     return this.usersRepository.createQueryBuilder('user')
       .leftJoinAndSelect('user.identityVerifications', 'verification')
       .where('user.id = :id', { id })
-      .orderBy('verification.id', 'DESC') // Ensure latest doc is first
+      .orderBy('verification.id', 'DESC')
       .getOne();
   }
 
