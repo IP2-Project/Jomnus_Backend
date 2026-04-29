@@ -1,36 +1,86 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, ParseIntPipe } from '@nestjs/common';
+// @/users/users.controller.ts
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Patch, 
+  Delete, // Added
+  Param, 
+  Query, 
+  UseGuards, 
+  Request, 
+  ForbiddenException, 
+  ParseIntPipe 
+} from '@nestjs/common';
 import { UsersService } from './users.service';
-import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 import { UserRole } from './entity/user.entity';
+import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
+import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // LOGIC 2: Orange Alert Box Stats
+  @UseGuards(JwtAuthGuard)
+  @Get('admin/dashboard')
+  async getDashboard(@Query() query: any, @Request() req) {
+    this.checkAdmin(req);
+    return this.usersService.getPaginatedUsers(query);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('admin/stats')
-  async getAdminStats() {
+  async getStats(@Request() req) {
+    this.checkAdmin(req);
     return this.usersService.getAdminSummaryStats();
   }
 
-  // LOGIC 1: Main Dashboard Table
-  @Get('admin/dashboard')
-  async getDashboardUsers(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('role') role?: string,
-    @Query('verified') verified?: string,
-    @Query('status') status?: string,
-    @Query('search') search?: string,
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/verify-manually')
+  async manualVerify(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    return this.usersService.manualVerify(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/role')
+  async changeRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('role') role: UserRole,
+    @Request() req,
   ) {
-    return this.usersService.getPaginatedUsers({
-      page,
-      limit,
-      role,
-      verified,
-      status,
-      search,
-    });
+    this.checkAdmin(req);
+    const adminId = req.user?.id || req.user?.sub;
+    return this.usersService.changeRole(id, role, adminId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/status')
+  async toggleStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: string,
+    @Request() req,
+  ) {
+    this.checkAdmin(req);
+    const adminId = req.user?.id || req.user?.sub;
+    return this.usersService.toggleStatus(id, status, adminId);
+  }
+
+  // LOGIC 1: Delete User Route
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  async softDelete(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    const adminId = req.user?.id || req.user?.sub;
+    return this.usersService.softRemove(id, adminId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  async findById(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    return this.usersService.findById(id);
   }
 
   @Get()
@@ -38,31 +88,16 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @Get(':id')
-  findById(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.findById(id);
-  }
-
   @Post()
   create(@Body() registerDto: RegisterAuthDto) {
     return this.usersService.create(registerDto);
   }
 
-  // LOGIC 3: Change Role (Arrows Icon)
-  @Patch(':id/role')
-  async changeUserRole(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('role') role: UserRole,
-  ) {
-    return this.usersService.changeRole(id, role);
-  }
-
-  // LOGIC 3: Ban/Unban (Circle Slash Icon)
-  @Patch(':id/status')
-  async toggleStatus(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('status') status: string,
-  ) {
-    return this.usersService.toggleStatus(id, status);
+  private checkAdmin(req: any) {
+    if (!req.user) throw new ForbiddenException('User session not found.');
+    const userRole = req.user?.currentRole || req.user?.role;
+    if (userRole !== 'ADMIN') {
+      throw new ForbiddenException('Access denied. Admin privileges required.');
+    }
   }
 }

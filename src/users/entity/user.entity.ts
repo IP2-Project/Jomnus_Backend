@@ -1,3 +1,4 @@
+// @/users/entity/user.entity.ts
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -6,6 +7,7 @@ import {
   OneToOne,
   OneToMany,
   JoinColumn,
+  DeleteDateColumn, // Added for Soft Delete
 } from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
 import { Exclude } from 'class-transformer';
@@ -58,7 +60,7 @@ export class UserEntity extends BaseEntity {
   })
   currentRole!: UserRole;
 
-  @Column({ default: 'active' }) // For Active/Banned status
+  @Column({ default: 'active' })
   status!: string;
 
   @Column({ nullable: true })
@@ -90,6 +92,10 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   @Exclude()
   otpExpiry?: Date | null;
+
+  // LOGIC 1: Soft Delete column
+  @DeleteDateColumn({ name: 'deleted_at', nullable: true })
+  deletedAt?: Date;
 
   @OneToOne(() => PerformerStats, (stats) => stats.user)
   @JoinColumn()

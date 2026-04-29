@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// @/users/users.service.ts
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEntity, UserRole } from '@/users/entity/user.entity';
@@ -18,7 +19,6 @@ export class UsersService {
     private statsService: StatsService,
   ) {}
 
-  // LOGIC 1: Advanced Paginated List
   async getPaginatedUsers(query: {
     page: number;
     limit: number;
@@ -27,9 +27,10 @@ export class UsersService {
     status?: string;
     search?: string;
   }) {
-    const { page, limit, role, verified, status, search } = query;
+    const { page = 1, limit = 10, role, verified, status, search } = query;
     const skip = (page - 1) * limit;
 
+    // TypeORM QueryBuilder automatically handles Soft Delete (deletedAt IS NULL)
     const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
     if (role && role !== 'ALL') {
@@ -53,11 +54,18 @@ export class UsersService {
       );
     }
 
-    const [data, total] = await queryBuilder
+    const [users, total] = await queryBuilder
       .orderBy('user.id', 'DESC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();
+
+    const data = users.map(user => ({
+      ...user,
+      verificationStatus: user.currentRole === UserRole.ADMIN 
+        ? 'Internal' 
+        : user.isIdentityVerified ? 'Yes' : 'No'
+    }));
 
     return {
       data,
@@ -71,7 +79,6 @@ export class UsersService {
     };
   }
 
-  // LOGIC 2: Admin Statistics (The Orange Box)
   async getAdminSummaryStats() {
     const pendingVerifications = await this.verificationRepository.count({
       where: { status: 'PENDING' } as any,
@@ -79,48 +86,87 @@ export class UsersService {
 
     const totalUsers = await this.usersRepository.count();
 
-    return {
-      pendingVerifications,
-      totalUsers,
-    };
+    return { pendingVerifications, totalUsers };
   }
 
-  // LOGIC 3 & 4: Actions & Internal Verification
-  async changeRole(userId: number, newRole: UserRole) {
-    const user = await this.findById(userId);
-    if (!user) throw new NotFoundException('User not found');
-    
-    user.currentRole = newRole;
-    
-    // Logic 4: Automatically verify if promoted to ADMIN
-    if (newRole === UserRole.ADMIN) {
-      user.isIdentityVerified = true;
-    }
-    
-    return await this.usersRepository.save(user);
-  }
-
-  async toggleStatus(id: number, status: string) {
+  // LOGIC 3: Manual Verify with History Sync
+  async manualVerify(id: number) {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
-    user.status = status;
+    
+    user.isIdentityVerified = true;
+    user.status = 'active';
+
+    // Sync History: Update latest document to APPROVED
+    if (user.identityVerifications && user.identityVerifications.length > 0) {
+      const latestDoc = user.identityVerifications[0]; 
+      latestDoc.status = 'APPROVED' as any;
+      await this.verificationRepository.save(latestDoc);
+    }
+
+    // LOGIC 2: Notification Placeholder
+    // await this.notificationService.notify(id, 'Your account is verified.');
+
     return await this.usersRepository.save(user);
+  }
+
+  async changeRole(userId: number, newRole: UserRole, adminId?: number) {
+    const targetUser = await this.findById(userId);
+    if (!targetUser) throw new NotFoundException('User not found');
+
+    if (targetUser.currentRole === UserRole.ADMIN && userId !== adminId) {
+      throw new ForbiddenException('Cannot modify a fellow Administrator.');
+    }
+
+    if (adminId && userId === adminId && newRole !== UserRole.ADMIN) {
+      throw new BadRequestException('You cannot remove your own Admin role.');
+    }
+    
+    targetUser.currentRole = newRole;
+    if (newRole === UserRole.ADMIN) targetUser.isIdentityVerified = true;
+    
+    return await this.usersRepository.save(targetUser);
+  }
+
+  async toggleStatus(id: number, status: string, adminId?: number) {
+    if (adminId && id === adminId && status === 'banned') {
+      throw new BadRequestException('You cannot ban your own account!');
+    }
+
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    
+    user.status = status;
+
+    // LOGIC 2: Notification Placeholder
+    // await this.notificationService.notify(id, `Account status changed to ${status}`);
+
+    return await this.usersRepository.save(user);
+  }
+
+  // LOGIC 1: Soft Delete Method
+  async softRemove(id: number, adminId: number) {
+    if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
+    
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+
+    return await this.usersRepository.softDelete(id);
   }
 
   async findById(id: number): Promise<UserEntity | null> {
-    return this.usersRepository.findOne({ where: { id } });
+    return this.usersRepository.createQueryBuilder('user')
+      .leftJoinAndSelect('user.identityVerifications', 'verification')
+      .where('user.id = :id', { id })
+      .orderBy('verification.id', 'DESC') // Ensure latest doc is first
+      .getOne();
   }
 
   async findByEmail(email: string): Promise<UserEntity | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
 
-  async findAll(): Promise<UserEntity[]> {
-    return this.usersRepository.find();
-  }
-
   async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
-    // Logic 4: Internal/Admin auto-verify on creation
     const isInternal = registerDto.email.includes('@jomnus.admin');
 
     const user = this.usersRepository.create({
@@ -133,7 +179,9 @@ export class UsersService {
     });
 
     const savedUser = await this.usersRepository.save(user);
-    await this.statsService.createInitialStats(savedUser);
+    if (this.statsService) {
+      await this.statsService.createInitialStats(savedUser);
+    }
     return savedUser;
   }
 
@@ -147,5 +195,9 @@ export class UsersService {
 
   async updatePassword(userId: number, password: string): Promise<void> {
     await this.usersRepository.update(userId, { password });
+  }
+
+  async findAll(): Promise<UserEntity[]> {
+    return this.usersRepository.find();
   }
 }
