@@ -1,7 +1,8 @@
 import { 
   Controller, Get, Patch, Post, Param, Body, ParseIntPipe, 
   Request, UseGuards, ForbiddenException, Logger, Query,
-  UseInterceptors, UploadedFiles, BadRequestException, Response, Delete
+  UseInterceptors, UploadedFiles, BadRequestException, Response, Delete,
+  ClassSerializerInterceptor // 1. Added this import
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { IdentityVerificationsService } from './identity-verifications.service';
@@ -12,12 +13,13 @@ import { extname } from 'path';
 import type { Response as ExpressResponse } from 'express';
 
 @Controller('identity-verifications')
+@UseInterceptors(ClassSerializerInterceptor) // 2. Added this to protect all endpoints
 export class IdentityVerificationsController {
   private readonly logger = new Logger(IdentityVerificationsController.name);
 
   constructor(private readonly service: IdentityVerificationsService) {}
 
-  // 1. STATS (Matches Top Cards in Figma image_3e01d9.jpg)
+  // 1. STATS (Matches Top Cards in Figma)
   @UseGuards(JwtAuthGuard)
   @Get('admin/stats')
   async getStats(@Request() req) {
@@ -38,7 +40,7 @@ export class IdentityVerificationsController {
     return csv;
   }
 
-// 3. PAGINATED LIST
+  // 3. PAGINATED LIST
   @UseGuards(JwtAuthGuard)
   @Get()
   async findAll(
@@ -46,11 +48,18 @@ export class IdentityVerificationsController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('search') search?: string,
-    @Query('status') status?: string, // <--- Add this line!
+    @Query('status') status?: string,
   ) {
     this.checkAdmin(req);
-    // Pass 'status' into the service call below
     return this.service.getPaginatedList(page, limit, search, status); 
+  }
+
+  // 3.5 GET SINGLE VERIFICATION (Deep Dive for Admin)
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    return this.service.getOne(id);
   }
 
   // 4. SUBMIT VERIFICATION (User Action)

@@ -375,4 +375,23 @@ export class IdentityVerificationsService {
       }
     }
   }
+
+  /**
+   * Fetches a single verification record with full details
+   */
+  async getOne(id: number) {
+    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+    const verification = await this.verificationRepo.findOne({
+      where: { id },
+      relations: ['user', 'reviewer'],
+    });
+
+    if (!verification) throw new NotFoundException(`Verification with ID ${id} not found`);
+
+    return {
+      ...verification,
+      id_card_url: verification.id_card_url ? `${baseUrl}/${verification.id_card_url}` : null,
+      selfie_url: verification.selfie_url ? `${baseUrl}/${verification.selfie_url}` : null,
+    };
+  }
 }
