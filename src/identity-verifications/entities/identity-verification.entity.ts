@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  UpdateDateColumn, // Added this import
   Entity,
   ManyToOne,
   JoinColumn,
@@ -54,4 +55,8 @@ export class IdentityVerificationEntity {
 
   @CreateDateColumn({ name: 'created_at' })
   created_at!: Date | null;
+
+  // Added this column to track the last activity for spam prevention
+  @UpdateDateColumn({ name: 'updated_at' })
+  updated_at!: Date;
 }

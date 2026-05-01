@@ -7,20 +7,24 @@ export class AuditLogEntity {
   id!: number;
 
   @Column()
-  action!: string; // 'APPROVED', 'REJECTED', or 'RESET'
+  action!: string; // 'REQUEST_SUBMITTED', 'APPROVED', 'REJECTED', 'RESET_TO_PENDING', 'IMAGES_CLEARED'
 
   @Column({ type: 'text', nullable: true })
-  reason!: string;
+  reason?: string;
 
   @Column()
-  targetUserId!: number; // The user being reviewed
-
-  @Column()
-  adminId!: number; // The admin doing the review
+  targetUserId!: number;
 
   @ManyToOne(() => UserEntity)
+  @JoinColumn({ name: 'targetUserId' })
+  targetUser?: UserEntity;
+
+  @Column({ nullable: true })
+  adminId?: number | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'adminId' })
-  admin!: UserEntity;
+  admin?: UserEntity;
 
   @CreateDateColumn()
   createdAt!: Date;

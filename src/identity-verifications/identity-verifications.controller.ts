@@ -1,7 +1,7 @@
 import { 
   Controller, Get, Patch, Post, Param, Body, ParseIntPipe, 
   Request, UseGuards, ForbiddenException, Logger, Query,
-  UseInterceptors, UploadedFiles, BadRequestException, Response
+  UseInterceptors, UploadedFiles, BadRequestException, Response, Delete
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { IdentityVerificationsService } from './identity-verifications.service';
@@ -17,6 +17,43 @@ export class IdentityVerificationsController {
 
   constructor(private readonly service: IdentityVerificationsService) {}
 
+  // 1. STATS (Matches Top Cards in Figma image_3e01d9.jpg)
+  @UseGuards(JwtAuthGuard)
+  @Get('admin/stats')
+  async getStats(@Request() req) {
+    this.checkAdmin(req);
+    return this.service.getAdminStats();
+  }
+
+  // 2. EXPORT CSV
+  @UseGuards(JwtAuthGuard)
+  @Get('export')
+  async export(@Request() req, @Response({ passthrough: true }) res: ExpressResponse) {
+    this.checkAdmin(req);
+    const csv = await this.service.exportToCsv();
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': 'attachment; filename="identity-verifications.csv"',
+    });
+    return csv;
+  }
+
+// 3. PAGINATED LIST
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  async findAll(
+    @Request() req,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string,
+    @Query('status') status?: string, // <--- Add this line!
+  ) {
+    this.checkAdmin(req);
+    // Pass 'status' into the service call below
+    return this.service.getPaginatedList(page, limit, search, status); 
+  }
+
+  // 4. SUBMIT VERIFICATION (User Action)
   @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(
@@ -33,9 +70,7 @@ export class IdentityVerificationsController {
             callback(null, `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`);
           },
         }),
-        limits: {
-          fileSize: 5 * 1024 * 1024, // 5MB Limit
-        },
+        limits: { fileSize: 5 * 1024 * 1024 },
         fileFilter: (req, file, callback) => {
           if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
             return callback(new BadRequestException('Only JPG and PNG images are allowed!'), false);
@@ -50,51 +85,17 @@ export class IdentityVerificationsController {
     @UploadedFiles() files: { id_card?: Express.Multer.File[]; selfie?: Express.Multer.File[] },
   ) {
     const userId = req.user?.id || req.user?.sub;
-
     if (!files?.id_card?.[0] || !files?.selfie?.[0]) {
       throw new BadRequestException('Both an ID Card image and a Selfie image are required.');
     }
-
     const dto = {
       id_card_url: files.id_card[0].path.replace(/\\/g, '/'),
       selfie_url: files.selfie[0].path.replace(/\\/g, '/'),
     };
-
-    this.logger.log(`User ${userId} submitted verification documents.`);
     return this.service.create(userId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('dashboard-stats')
-  async getStats(@Request() req) {
-    this.checkAdmin(req);
-    return this.service.getAdminStats();
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('export')
-  async export(@Request() req, @Response({ passthrough: true }) res: ExpressResponse) {
-    this.checkAdmin(req);
-    const csv = await this.service.exportToCsv();
-    res.set({
-      'Content-Type': 'text/csv',
-      'Content-Disposition': 'attachment; filename="identity-verifications.csv"',
-    });
-    return csv;
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  async findAll(
-    @Request() req,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search?: string,
-  ) {
-    this.checkAdmin(req);
-    return this.service.getPaginatedList(page, limit, search);
-  }
-
+  // 5. REVIEW (Approve/Reject)
   @UseGuards(JwtAuthGuard)
   @Patch(':id/review')
   async review(
@@ -107,12 +108,22 @@ export class IdentityVerificationsController {
     return this.service.review(id, adminId, dto);
   }
 
+  // 6. RESET
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reset')
   async reset(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
     const adminId = req.user?.id || req.user?.sub;
     return this.service.resetToPending(id, adminId);
+  }
+
+  // 7. CLEAR IMAGES
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/images')
+  async clearImages(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    const adminId = req.user?.id || req.user?.sub;
+    return this.service.clearVerificationImages(id, adminId);
   }
 
   private checkAdmin(req: any) {
