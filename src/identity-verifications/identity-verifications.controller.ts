@@ -1,7 +1,7 @@
 import { 
   Controller, Get, Patch, Post, Param, Body, ParseIntPipe, 
   Request, UseGuards, ForbiddenException, Logger, Query,
-  UseInterceptors, UploadedFiles 
+  UseInterceptors, UploadedFiles, BadRequestException, Response
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { IdentityVerificationsService } from './identity-verifications.service';
@@ -9,6 +9,7 @@ import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.auth.guard';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import type { Response as ExpressResponse } from 'express';
 
 @Controller('identity-verifications')
 export class IdentityVerificationsController {
@@ -32,6 +33,15 @@ export class IdentityVerificationsController {
             callback(null, `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`);
           },
         }),
+        limits: {
+          fileSize: 5 * 1024 * 1024, // 5MB Limit
+        },
+        fileFilter: (req, file, callback) => {
+          if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+            return callback(new BadRequestException('Only JPG and PNG images are allowed!'), false);
+          }
+          callback(null, true);
+        },
       },
     ),
   )
@@ -41,22 +51,36 @@ export class IdentityVerificationsController {
   ) {
     const userId = req.user?.id || req.user?.sub;
 
-    // Map the uploaded file paths to the DTO your service expects
+    if (!files?.id_card?.[0] || !files?.selfie?.[0]) {
+      throw new BadRequestException('Both an ID Card image and a Selfie image are required.');
+    }
+
     const dto = {
-      id_card_url: files.id_card?.[0]?.path || '',
-      selfie_url: files.selfie?.[0]?.path || '',
+      id_card_url: files.id_card[0].path.replace(/\\/g, '/'),
+      selfie_url: files.selfie[0].path.replace(/\\/g, '/'),
     };
 
+    this.logger.log(`User ${userId} submitted verification documents.`);
     return this.service.create(userId, dto);
   }
-
-  // --- ADMIN ROUTES ---
 
   @UseGuards(JwtAuthGuard)
   @Get('dashboard-stats')
   async getStats(@Request() req) {
     this.checkAdmin(req);
     return this.service.getAdminStats();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('export')
+  async export(@Request() req, @Response({ passthrough: true }) res: ExpressResponse) {
+    this.checkAdmin(req);
+    const csv = await this.service.exportToCsv();
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': 'attachment; filename="identity-verifications.csv"',
+    });
+    return csv;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -83,7 +107,14 @@ export class IdentityVerificationsController {
     return this.service.review(id, adminId, dto);
   }
 
-  // Helper to keep code clean
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/reset')
+  async reset(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    const adminId = req.user?.id || req.user?.sub;
+    return this.service.resetToPending(id, adminId);
+  }
+
   private checkAdmin(req: any) {
     const userRole = req.user?.currentRole || req.user?.role || req.user?.current_role;
     if (userRole !== 'ADMIN') {

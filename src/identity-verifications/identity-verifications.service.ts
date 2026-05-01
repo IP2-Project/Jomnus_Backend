@@ -2,11 +2,13 @@ import {
   Injectable, 
   NotFoundException, 
   BadRequestException, 
-  ForbiddenException 
+  ForbiddenException,
+  Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual, DataSource } from 'typeorm';
 import { IdentityVerificationEntity, VerificationStatus } from './entities/identity-verification.entity';
+import { AuditLogEntity } from './entities/audit-log.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -15,17 +17,21 @@ import * as path from 'path';
 
 @Injectable()
 export class IdentityVerificationsService {
+  private readonly logger = new Logger(IdentityVerificationsService.name);
+
   constructor(
     @InjectRepository(IdentityVerificationEntity)
     private readonly verificationRepo: Repository<IdentityVerificationEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    @InjectRepository(AuditLogEntity)
+    private readonly auditLogRepo: Repository<AuditLogEntity>,
     private readonly notificationsService: NotificationsService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getPaginatedList(page: number, limit: number, search?: string) {
     const skip = (page - 1) * limit;
-
     const queryBuilder = this.verificationRepo.createQueryBuilder('verification')
       .leftJoinAndSelect('verification.user', 'user')
       .leftJoinAndSelect('verification.reviewer', 'reviewer')
@@ -38,10 +44,7 @@ export class IdentityVerificationsService {
       );
     }
 
-    const [data, total] = await queryBuilder
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    const [data, total] = await queryBuilder.skip(skip).take(limit).getManyAndCount();
 
     return {
       data,
@@ -62,8 +65,15 @@ export class IdentityVerificationsService {
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
+
     const processedToday = await this.verificationRepo.count({
       where: { reviewed_at: MoreThanOrEqual(startOfToday) },
+    });
+
+    const processedTodayDetails = await this.verificationRepo.find({
+      where: { reviewed_at: MoreThanOrEqual(startOfToday) },
+      relations: ['user'],
+      take: 6,
     });
 
     const recentActivity = await this.verificationRepo.find({
@@ -76,40 +86,46 @@ export class IdentityVerificationsService {
       relations: ['user', 'reviewer'],
     });
 
-    return { totalPending, processedToday, recentActivity };
+    return { 
+      totalPending, 
+      processedToday, 
+      processedAvatars: processedTodayDetails
+        .map(v => v.user?.profileImage)
+        .filter((img): img is string => img !== null && img !== undefined), 
+      recentActivity 
+    };
+  }
+
+  async exportToCsv() {
+    const data = await this.verificationRepo.find({
+      relations: ['user'],
+      order: { created_at: 'DESC' },
+    });
+
+    const header = 'ID,Full Name,Email,Status,Rejection Reason,Created At\n';
+    const rows = data.map(v => 
+      `${v.id},"${v.user?.fullName}","${v.user?.email}",${v.status},"${v.rejection_reason || ''}",${v.created_at?.toISOString()}`
+    ).join('\n');
+
+    return header + rows;
   }
 
   async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
-    let verification = await this.verificationRepo.findOne({
-      where: { user_id: userId },
-    });
+    let verification = await this.verificationRepo.findOne({ where: { user_id: userId } });
 
-    // --- HELPER: Delete files if request is blocked ---
-    const cleanupFiles = async () => {
-      try {
-        if (dto.id_card_url) await fs.unlink(path.resolve(dto.id_card_url));
-        if (dto.selfie_url) await fs.unlink(path.resolve(dto.selfie_url));
-        console.log('Cleanup: Deleted files from blocked/duplicate request.');
-      } catch (err: any) {
-        console.warn(`Cleanup skipped: ${err.message}`);
-      }
+    const blockUpload = async (message: string) => {
+      await this.deletePhysicalFiles([dto.id_card_url, dto.selfie_url]);
+      throw new BadRequestException(message);
     };
 
-    // 1. Block if already APPROVED
-    if (verification && verification.status === VerificationStatus.APPROVED) {
-      await cleanupFiles();
-      throw new ForbiddenException(
-        'Your identity is already verified. Changes are not allowed.'
-      );
+    if (verification?.status === VerificationStatus.APPROVED) {
+      await blockUpload('Identity already verified.');
     }
 
-    // 2. Block if already PENDING
-    if (verification && verification.status === VerificationStatus.PENDING) {
-      await cleanupFiles();
-      throw new BadRequestException('You already have a verification request pending review.');
+    if (verification?.status === VerificationStatus.PENDING && verification.id_card_url) {
+      await blockUpload('Verification request already pending.');
     }
 
-    // 3. If record exists (was REJECTED), update it
     if (verification) {
       verification.id_card_url = dto.id_card_url;
       verification.selfie_url = dto.selfie_url;
@@ -118,7 +134,6 @@ export class IdentityVerificationsService {
       return await this.verificationRepo.save(verification);
     }
 
-    // 4. Otherwise, create brand new row
     const newRequest = this.verificationRepo.create({
       user_id: userId,
       id_card_url: dto.id_card_url,
@@ -130,65 +145,112 @@ export class IdentityVerificationsService {
   }
 
   async review(id: number, adminId: number, dto: ReviewVerificationDto) {
-    const verification = await this.verificationRepo.findOne({ where: { id } });
-    if (!verification) throw new NotFoundException('Verification request not found');
+    const admin = await this.userRepo.findOne({ where: { id: adminId } });
+    if (!admin) throw new ForbiddenException('Invalid Admin performing review.');
 
-    const user = await this.userRepo.findOne({ where: { id: verification.user_id } });
-    if (!user) throw new NotFoundException('User not found');
+    return await this.dataSource.transaction(async (manager) => {
+      const verification = await manager.findOne(IdentityVerificationEntity, { 
+        where: { id },
+        lock: { mode: 'pessimistic_write' } 
+      });
 
-    if (dto.status === VerificationStatus.REJECTED && (!dto.rejection_reason || dto.rejection_reason.trim() === '')) {
-      throw new BadRequestException('A rejection reason must be provided when rejecting.');
-    }
-
-    // --- REJECTION CLEANUP ---
-    if (dto.status === VerificationStatus.REJECTED) {
-      const files = [verification.id_card_url, verification.selfie_url];
+      if (!verification) throw new NotFoundException('Request not found');
       
-      for (const fileUrlOrPath of files) {
-        if (fileUrlOrPath) {
-          let cleanPath = fileUrlOrPath;
-
-          if (fileUrlOrPath.startsWith('http')) {
-            const urlParts = fileUrlOrPath.split('/');
-            cleanPath = urlParts.slice(3).join('/'); 
-          }
-
-          try {
-            const absolutePath = path.resolve(cleanPath);
-            await fs.unlink(absolutePath);
-            console.log(`Successfully deleted obsolete file: ${absolutePath}`);
-          } catch (err: any) {
-            console.warn(`Cleanup skipped for ${cleanPath}: ${err.message}`);
-          }
-        }
+      if (verification.status === dto.status) {
+        throw new BadRequestException(`Request is already ${dto.status}.`);
       }
+
+      if (dto.status === VerificationStatus.APPROVED && !verification.id_card_url) {
+        throw new BadRequestException('Cannot approve: Files were deleted.');
+      }
+
+      if (dto.status === VerificationStatus.REJECTED) {
+        if (!dto.rejection_reason?.trim()) {
+          throw new BadRequestException('Rejection reason required.');
+        }
+        await this.deletePhysicalFiles([verification.id_card_url, verification.selfie_url]);
+        verification.id_card_url = null;
+        verification.selfie_url = null;
+      }
+
+      verification.status = dto.status;
+      verification.reviewed_by = adminId;
+      verification.reviewed_at = new Date();
+      verification.rejection_reason = dto.status === VerificationStatus.REJECTED ? dto.rejection_reason : null;
+      await manager.save(verification);
+
+      await manager.update(UserEntity, verification.user_id, {
+        isIdentityVerified: dto.status === VerificationStatus.APPROVED,
+      });
+
+      const auditLog = manager.create(AuditLogEntity, {
+        action: dto.status,
+        reason: dto.rejection_reason ?? undefined, 
+        targetUserId: verification.user_id,
+        adminId: adminId,
+      });
+      await manager.save(auditLog);
+
+      const isApproved = dto.status === VerificationStatus.APPROVED;
+      await this.notificationsService.createNotification({
+        user_id: verification.user_id,
+        audience: 'user',
+        title: isApproved ? 'Identity Verified' : 'Status Updated',
+        message: isApproved ? 'Your identity is verified!' : `Rejected: ${dto.rejection_reason}`,
+        type: isApproved ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
+      });
+
+      return verification;
+    });
+  }
+
+  async resetToPending(id: number, adminId: number) {
+    const verification = await this.verificationRepo.findOne({ where: { id } });
+    if (!verification) throw new NotFoundException('Request not found');
+
+    return await this.dataSource.transaction(async (manager) => {
+      await this.deletePhysicalFiles([verification.id_card_url, verification.selfie_url]);
       
+      await manager.update(UserEntity, verification.user_id, {
+        isIdentityVerified: false,
+      });
+
+      verification.status = VerificationStatus.PENDING;
       verification.id_card_url = null;
       verification.selfie_url = null;
+      verification.rejection_reason = null;
+      verification.reviewed_at = null as any; 
+      verification.reviewed_by = null as any;
+      await manager.save(verification);
+
+      const auditLog = manager.create(AuditLogEntity, {
+        action: 'RESET_TO_PENDING',
+        reason: 'Admin manually reset verification to pending.',
+        targetUserId: verification.user_id,
+        adminId: adminId,
+      });
+      await manager.save(auditLog);
+
+      return { message: 'Reset successful' };
+    });
+  }
+
+  private async deletePhysicalFiles(filePaths: (string | null)[]) {
+    for (const filePath of filePaths) {
+      if (!filePath) continue;
+      try {
+        const absolutePath = path.resolve(filePath);
+        await fs.access(absolutePath); 
+        await fs.unlink(absolutePath);
+        this.logger.log(`Deleted file: ${filePath}`);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if ((err as any).code === 'ENOENT') {
+          this.logger.warn(`File not found: ${filePath}`);
+        } else {
+          this.logger.error(`Failed to delete file: ${errorMessage}`);
+        }
+      }
     }
-
-    verification.status = dto.status;
-    verification.reviewed_by = adminId;
-    verification.reviewed_at = new Date();
-    verification.rejection_reason = dto.status === VerificationStatus.REJECTED ? dto.rejection_reason : null;
-
-    await this.verificationRepo.save(verification);
-
-    await this.userRepo.update(user.id, {
-      isIdentityVerified: dto.status === VerificationStatus.APPROVED,
-    });
-
-    const isApproved = dto.status === VerificationStatus.APPROVED;
-    await this.notificationsService.createNotification({
-      user_id: user.id,
-      audience: 'user',
-      title: isApproved ? 'Identity Verified' : 'Identity Verification Rejected',
-      message: isApproved 
-        ? 'Great news! Your identity has been successfully verified.' 
-        : `Verification failed. Reason: ${dto.rejection_reason}`,
-      type: isApproved ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
-    });
-
-    return verification;
   }
 }
