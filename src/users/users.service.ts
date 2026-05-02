@@ -7,6 +7,7 @@ import { StatsService } from '@/stats/stats.service';
 import { IdentityVerificationEntity, VerificationStatus } from '@/identity-verifications/entities/identity-verification.entity';
 import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.entity';
 import { DataSource } from 'typeorm';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class UsersService {
@@ -27,90 +28,87 @@ export class UsersService {
 
   // --- DASHBOARD LOGIC ---
 
-  async getPaginatedUsers(query: {
-      page: number;
-      limit: number;
-      role?: string;
-      verified?: string;
-      status?: string;
-      search?: string;
-      pendingOnly?: string;
-    }) {
-      const { page = 1, limit = 10, role, verified, status, search, pendingOnly } = query;
-      const skip = (page - 1) * limit;
+async getPaginatedUsers(query: {
+    page: number;
+    limit: number;
+    role?: string;
+    verified?: string;
+    status?: string;
+    search?: string;
+    pendingOnly?: string;
+  }) {
+    const { page = 1, limit = 10, role, verified, status, search, pendingOnly } = query;
+    const skip = (page - 1) * limit;
 
-      const queryBuilder = this.usersRepository.createQueryBuilder('user');
+    const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
-      // Filter for users with pending identity verifications
-      if (pendingOnly === 'true') {
-        queryBuilder
-          .innerJoin('user.identityVerifications', 'verification')
-          .andWhere('verification.status = :vStatus', { vStatus: 'PENDING' });
-      }
-
-      // Filter by role (REQUESTER, PERFORMER, ADMIN)
-      if (role && role !== 'ALL') {
-        queryBuilder.andWhere('user.currentRole = :role', { role });
-      }
-
-      // Filter by identity verification status
-      if (verified === 'true') {
-        queryBuilder.andWhere('user.isIdentityVerified = true');
-      } else if (verified === 'false') {
-        queryBuilder.andWhere('user.isIdentityVerified = false');
-      }
-
-      // Filter by account status (active, banned)
-      if (status && status !== 'ALL') {
-        queryBuilder.andWhere('user.status = :status', { status });
-      }
-
-      // Search by name or email
-      if (search) {
-        queryBuilder.andWhere(
-          '(user.fullName ILIKE :search OR user.email ILIKE :search)',
-          { search: `%${search}%` }
-        );
-      }
-
-      const [users, total] = await queryBuilder
-        .orderBy('user.id', 'DESC')
-        .skip(skip)
-        .take(limit)
-        .getManyAndCount();
-
-      /**
-       * Map the data to include the virtual 'verificationStatus' label
-       * used for the "Verified" column in the Admin Dashboard (Figma)
-       */
-      const data = users.map(user => {
-        let vLabel = 'No';
-
-        if (user.currentRole === UserRole.ADMIN) {
-          vLabel = 'Internal'; // Required label for Admins
-        } else if (user.isIdentityVerified) {
-          // Checks if user is identity verified and if they have the 'isVerified' blue check
-          vLabel = user.isVerified ? 'Verified' : 'Yes';
-        }
-
-        return {
-          ...user,
-          verificationStatus: vLabel // This property maps to the UI Verified column
-        };
-      });
-
-      return {
-        data,
-        meta: {
-          totalItems: total,
-          itemCount: data.length,
-          itemsPerPage: Number(limit),
-          totalPages: Math.ceil(total / limit),
-          currentPage: Number(page),
-        },
-      };
+    // Filter for BANNED (soft-deleted) vs ACTIVE
+    if (status === 'BANNED') {
+      queryBuilder
+        .withDeleted()
+        .where('user.deletedAt IS NOT NULL');
+    } else if (status === 'ACTIVE') {
+      queryBuilder.where('user.deletedAt IS NULL');
     }
 
+    // Filter for pending identity verifications
+    if (pendingOnly === 'true') {
+      queryBuilder
+        .innerJoin('user.identityVerifications', 'verification')
+        .andWhere('verification.status = :vStatus', { vStatus: 'PENDING' });
+    }
+
+    // Role filtering
+    if (role && role !== 'ALL') {
+      queryBuilder.andWhere('user.currentRole = :role', { role });
+    }
+
+    // Search logic
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.fullName ILIKE :search OR user.email ILIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    const [users, total] = await queryBuilder
+      .orderBy('user.id', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    // MAP DATA & FIX EXCLUDE BUG
+    const data = users.map(user => {
+      let vLabel = 'No';
+      if (user.currentRole === UserRole.ADMIN) {
+        vLabel = 'Internal';
+      } else if (user.isIdentityVerified) {
+        vLabel = user.isVerified ? 'Verified' : 'Yes';
+      }
+
+      // Create a plain object first
+      const plainObject = {
+        ...user,
+        verificationStatus: vLabel,
+        displayStatus: user.deletedAt ? 'Banned' : 'Active' 
+      };
+
+      // Convert back to UserEntity instance so @Exclude() works
+      return plainToInstance(UserEntity, plainObject);
+    });
+
+    return {
+      data,
+      meta: {
+        totalItems: total,
+        itemCount: data.length,
+        itemsPerPage: Number(limit),
+        totalPages: Math.ceil(total / limit),
+        currentPage: Number(page),
+      },
+    };
+  }
+  
   async getAdminSummaryStats() {
     const pendingVerifications = await this.verificationRepository.count({
       where: { status: 'PENDING' } as any,

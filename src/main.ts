@@ -1,7 +1,7 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core'; // Add Reflector
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
-import { ValidationPipe } from '@nestjs/common/pipes/validation.pipe';
+import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common'; // Add ClassSerializerInterceptor
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 
@@ -29,6 +29,11 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
+
+  // --- ADD THIS LINE TO FIX THE PASSWORD EXCLUSION ---
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  // --------------------------------------------------
+
   app.use(cookieParser());
   
   const port = process.env.PORT ?? 3001;
