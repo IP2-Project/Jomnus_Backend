@@ -18,11 +18,15 @@ import { UsersService } from './users.service';
 import { UserRole } from './entity/user.entity';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
+import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { ChangeRoleDto } from './dto/change-role.dto';
 
 @Controller('users')
 @UseInterceptors(ClassSerializerInterceptor) 
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // --- DASHBOARD & STATS ---
 
   @UseGuards(JwtAuthGuard)
   @Get('admin/dashboard')
@@ -38,11 +42,13 @@ export class UsersController {
     return this.usersService.getAdminSummaryStats();
   }
 
+  // --- ADMIN ACTIONS ---
+
   @UseGuards(JwtAuthGuard)
-  @Patch(':id/verify-manually')
+  @Patch(':id/manual-verify')
   async manualVerify(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
+    const adminId = this.getAdminId(req);
     return this.usersService.manualVerify(id, adminId);
   }
 
@@ -50,33 +56,59 @@ export class UsersController {
   @Patch(':id/role')
   async changeRole(
     @Param('id', ParseIntPipe) id: number,
-    @Body('role') role: UserRole,
+    @Body() changeRoleDto: ChangeRoleDto,
     @Request() req,
   ) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
-    return this.usersService.changeRole(id, role, adminId);
+    const adminId = this.getAdminId(req);
+    return this.usersService.changeRole(id, changeRoleDto.role, adminId);
+  }
+
+  /**
+   * NEW: Toggles the "isVerified" (Blue Checkmark/Trusted) status
+   * This updates the 'Verified' column in Figma (image_a38738.jpg)
+   */
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/verified-badge')
+  async toggleVerifiedBadge(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('isVerified') isVerified: boolean,
+    @Request() req,
+  ) {
+    this.checkAdmin(req);
+    const adminId = this.getAdminId(req);
+    return this.usersService.toggleVerifiedBadge(id, isVerified, adminId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/status')
   async toggleStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body('status') status: string,
+    @Body() updateUserStatusDto: UpdateUserStatusDto,
     @Request() req,
   ) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
-    return this.usersService.toggleStatus(id, status, adminId);
+    const adminId = this.getAdminId(req);
+    return this.usersService.toggleStatus(id, updateUserStatusDto.status, adminId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/restore')
+  async restoreUser(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req); 
+    const adminId = this.getAdminId(req); 
+    return this.usersService.restoreUser(id, adminId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async softDelete(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
+    const adminId = this.getAdminId(req);
     return this.usersService.softRemove(id, adminId);
   }
+
+  // --- GENERAL SEARCH ---
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
@@ -85,8 +117,10 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-  findAll() {
+  async findAll(@Request() req) {
+    this.checkAdmin(req);
     return this.usersService.findAll();
   }
 
@@ -95,11 +129,17 @@ export class UsersController {
     return this.usersService.create(registerDto);
   }
 
+  // --- HELPERS ---
+
   private checkAdmin(req: any) {
     if (!req.user) throw new ForbiddenException('User session not found.');
     const userRole = req.user?.currentRole || req.user?.role;
-    if (userRole !== 'ADMIN') {
+    if (userRole !== UserRole.ADMIN) {
       throw new ForbiddenException('Access denied. Admin privileges required.');
     }
+  }
+
+  private getAdminId(req: any): number {
+    return req.user?.id || req.user?.sub;
   }
 }

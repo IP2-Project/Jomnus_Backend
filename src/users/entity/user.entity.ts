@@ -1,4 +1,3 @@
-// @/users/entity/user.entity.ts
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -22,6 +21,11 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  BANNED = 'banned',
+}
+
 @Entity('users')
 export class UserEntity extends BaseEntity {
   @Column({ name: 'FullName' })
@@ -30,7 +34,6 @@ export class UserEntity extends BaseEntity {
   @Column({ unique: true })
   email!: string;
 
-  // Hides password from all API responses
   @Exclude()
   @Column()
   password!: string;
@@ -50,7 +53,12 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'is_verified', default: false })
   isVerified!: boolean;
 
-  @Column({ name: 'is_performer', default: true })
+  /**
+   * We use @Exclude() here so 'isPerformer' doesn't show up in JSON.
+   * TypeORM maps this to 'is_performer' column in Postgres.
+   */
+  @Exclude({ toPlainOnly: true }) 
+  @Column({ name: 'is_performer', default: false })
   isPerformer!: boolean;
 
   @Column({
@@ -61,8 +69,12 @@ export class UserEntity extends BaseEntity {
   })
   currentRole!: UserRole;
 
-  @Column({ default: 'active' })
-  status!: string;
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.ACTIVE,
+  })
+  status!: UserStatus;
 
   @Column({ nullable: true })
   bio?: string;
@@ -82,17 +94,14 @@ export class UserEntity extends BaseEntity {
   @Column({ type: 'float', nullable: true })
   longitude?: number;
 
-  // Hides Refresh Token from API responses
   @Exclude()
   @Column({ name: 'refresh_token', type: 'text', nullable: true })
   refreshToken?: string | null;
 
-  // Hides OTP from API responses
   @Exclude()
   @Column({ type: 'varchar', nullable: true })
   otp?: string | null;
 
-  // Hides OTP Expiry from API responses
   @Exclude()
   @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   otpExpiry?: Date | null;

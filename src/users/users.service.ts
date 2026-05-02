@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEntity, UserRole } from '@/users/entity/user.entity';
+import { UserEntity, UserRole, UserStatus } from '@/users/entity/user.entity';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 import { StatsService } from '@/stats/stats.service';
-import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
+import { IdentityVerificationEntity, VerificationStatus } from '@/identity-verifications/entities/identity-verification.entity';
+import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.entity';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class UsersService {
@@ -15,85 +17,99 @@ export class UsersService {
     @InjectRepository(IdentityVerificationEntity)
     private verificationRepository: Repository<IdentityVerificationEntity>,
 
+    @InjectRepository(AuditLogEntity)
+    private auditLogRepository: Repository<AuditLogEntity>,
+
     private statsService: StatsService,
+
+    private dataSource: DataSource,
   ) {}
 
-  // --- FIGMA DASHBOARD LOGIC ---
+  // --- DASHBOARD LOGIC ---
 
   async getPaginatedUsers(query: {
-    page: number;
-    limit: number;
-    role?: string;
-    verified?: string;
-    status?: string;
-    search?: string;
-    pendingOnly?: string; // New filter for clicking the stats box
-  }) {
-    const { page = 1, limit = 10, role, verified, status, search, pendingOnly } = query;
-    const skip = (page - 1) * limit;
+      page: number;
+      limit: number;
+      role?: string;
+      verified?: string;
+      status?: string;
+      search?: string;
+      pendingOnly?: string;
+    }) {
+      const { page = 1, limit = 10, role, verified, status, search, pendingOnly } = query;
+      const skip = (page - 1) * limit;
 
-    const queryBuilder = this.usersRepository.createQueryBuilder('user');
+      const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
-    // 1. Filter for clicking "Pending Verifications" box
-    if (pendingOnly === 'true') {
-      queryBuilder
-        .innerJoin('user.identityVerifications', 'verification')
-        .andWhere('verification.status = :vStatus', { vStatus: 'PENDING' });
-    }
+      // Filter for users with pending identity verifications
+      if (pendingOnly === 'true') {
+        queryBuilder
+          .innerJoin('user.identityVerifications', 'verification')
+          .andWhere('verification.status = :vStatus', { vStatus: 'PENDING' });
+      }
 
-    // 2. Role Filter
-    if (role && role !== 'ALL') {
-      queryBuilder.andWhere('user.currentRole = :role', { role });
-    }
+      // Filter by role (REQUESTER, PERFORMER, ADMIN)
+      if (role && role !== 'ALL') {
+        queryBuilder.andWhere('user.currentRole = :role', { role });
+      }
 
-    // 3. Verified Filter
-    if (verified === 'true') {
-      queryBuilder.andWhere('user.isIdentityVerified = true');
-    } else if (verified === 'false') {
-      queryBuilder.andWhere('user.isIdentityVerified = false');
-    }
+      // Filter by identity verification status
+      if (verified === 'true') {
+        queryBuilder.andWhere('user.isIdentityVerified = true');
+      } else if (verified === 'false') {
+        queryBuilder.andWhere('user.isIdentityVerified = false');
+      }
 
-    // 4. Status Filter
-    if (status && status !== 'ALL') {
-      queryBuilder.andWhere('user.status = :status', { status });
-    }
+      // Filter by account status (active, banned)
+      if (status && status !== 'ALL') {
+        queryBuilder.andWhere('user.status = :status', { status });
+      }
 
-    // 5. Search Filter
-    if (search) {
-      queryBuilder.andWhere(
-        '(user.fullName ILIKE :search OR user.email ILIKE :search)',
-        { search: `%${search}%` }
-      );
-    }
+      // Search by name or email
+      if (search) {
+        queryBuilder.andWhere(
+          '(user.fullName ILIKE :search OR user.email ILIKE :search)',
+          { search: `%${search}%` }
+        );
+      }
 
-    const [users, total] = await queryBuilder
-      .orderBy('user.id', 'DESC')
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+      const [users, total] = await queryBuilder
+        .orderBy('user.id', 'DESC')
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount();
 
-    // Mapping and Data Sanitization
-    const data = users.map(user => {
-      const { password, refreshToken, otp, otpExpiry, ...safeUser } = user; 
+      /**
+       * Map the data to include the virtual 'verificationStatus' label
+       * used for the "Verified" column in the Admin Dashboard (Figma)
+       */
+      const data = users.map(user => {
+        let vLabel = 'No';
+
+        if (user.currentRole === UserRole.ADMIN) {
+          vLabel = 'Internal'; // Required label for Admins
+        } else if (user.isIdentityVerified) {
+          // Checks if user is identity verified and if they have the 'isVerified' blue check
+          vLabel = user.isVerified ? 'Verified' : 'Yes';
+        }
+
+        return {
+          ...user,
+          verificationStatus: vLabel // This property maps to the UI Verified column
+        };
+      });
+
       return {
-        ...safeUser,
-        verificationStatus: user.currentRole === UserRole.ADMIN 
-          ? 'Internal' 
-          : user.isIdentityVerified ? 'Yes' : 'No'
+        data,
+        meta: {
+          totalItems: total,
+          itemCount: data.length,
+          itemsPerPage: Number(limit),
+          totalPages: Math.ceil(total / limit),
+          currentPage: Number(page),
+        },
       };
-    });
-
-    return {
-      data,
-      meta: {
-        totalItems: total,
-        itemCount: data.length,
-        itemsPerPage: Number(limit),
-        totalPages: Math.ceil(total / limit),
-        currentPage: Number(page),
-      },
-    };
-  }
+    }
 
   async getAdminSummaryStats() {
     const pendingVerifications = await this.verificationRepository.count({
@@ -105,102 +121,238 @@ export class UsersService {
 
   // --- ADMIN ACTIONS ---
 
-  async manualVerify(id: number, adminId: number) {
-    const user = await this.findById(id);
-    if (!user) throw new NotFoundException('User not found');
-    
-    user.isIdentityVerified = true;
-    user.status = 'active';
+  async manualVerify(userId: number, adminId: number) {
+    return await this.dataSource.transaction(async (manager) => {
+      const user = await manager.findOne(UserEntity, { 
+        where: { id: userId },
+        relations: ['identityVerifications'] 
+      });
+      
+      if (!user) throw new NotFoundException('User not found');
 
-    if (user.identityVerifications && user.identityVerifications.length > 0) {
-      const latestDoc = user.identityVerifications[0]; 
-      latestDoc.status = 'APPROVED' as any;
-      latestDoc.reviewed_by = adminId;
-      latestDoc.reviewed_at = new Date();
-      await this.verificationRepository.save(latestDoc);
-    }
+      if (user.isIdentityVerified && user.status === UserStatus.ACTIVE) {
+        throw new BadRequestException('This user is already verified and active.');
+      }
 
-    return await this.usersRepository.save(user);
+      user.isIdentityVerified = true;
+      user.status = UserStatus.ACTIVE;
+      user.isPerformer = (user.currentRole === UserRole.PERFORMER);
+      
+      await manager.save(user);
+
+      let verification = await manager.findOne(IdentityVerificationEntity, {
+        where: { user: { id: userId } }
+      });
+
+      if (verification) {
+        verification.status = VerificationStatus.APPROVED;
+        verification.rejection_reason = 'Manually verified by Administrator';
+        verification.reviewed_by = adminId;
+        verification.reviewed_at = new Date();
+        await manager.save(verification);
+      } else {
+        const newVerify = manager.create(IdentityVerificationEntity, {
+          user: user,
+          status: VerificationStatus.APPROVED,
+          rejection_reason: 'Manually verified by Administrator',
+          reviewed_by: adminId,
+          reviewed_at: new Date(),
+          id_card_url: 'MANUAL_BYPASS',
+          selfie_url: 'MANUAL_BYPASS',
+        });
+        await manager.save(newVerify);
+      }
+
+      await manager.save(AuditLogEntity, {
+        adminId: adminId,
+        action: 'MANUAL_VERIFICATION',
+        targetUserId: userId, 
+        reason: 'Bypassed document upload via Admin panel.',
+        createdAt: new Date(),
+      });
+
+      return { message: 'User manually verified and audit trail created.' };
+    });
   }
 
-  async changeRole(userId: number, newRole: UserRole, adminId?: number) {
+  async changeRole(userId: number, newRole: UserRole, adminId: number) {
+    if (userId === adminId) {
+      throw new BadRequestException('Admins cannot change their own roles.');
+    }
+
     const targetUser = await this.findById(userId);
     if (!targetUser) throw new NotFoundException('User not found');
+
+    if (targetUser.currentRole === UserRole.ADMIN && newRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('You do not have permission to demote another Administrator.');
+    }
 
     if (newRole === UserRole.PERFORMER && !targetUser.isIdentityVerified) {
       throw new BadRequestException('User must be identity verified before becoming a Performer.');
     }
 
-    if (targetUser.currentRole === UserRole.ADMIN && userId !== adminId) {
-      throw new ForbiddenException('Cannot modify a fellow Administrator.');
-    }
-
-    if (adminId && userId === adminId && newRole !== UserRole.ADMIN) {
-      throw new BadRequestException('You cannot remove your own Admin role.');
-    }
+    const oldRole = targetUser.currentRole;
     
     targetUser.currentRole = newRole;
-    if (newRole === UserRole.ADMIN) targetUser.isIdentityVerified = true;
-    
-    return await this.usersRepository.save(targetUser);
+    targetUser.isPerformer = (newRole === UserRole.PERFORMER);
+
+    const savedUser = await this.usersRepository.save(targetUser);
+
+    if (newRole === UserRole.PERFORMER) {
+      await this.statsService.createInitialStats(savedUser);
+    }
+
+    await this.auditLogRepository.save({
+      adminId: adminId,
+      action: 'ROLE_CHANGE',
+      targetUserId: userId,
+      reason: `Role changed from ${oldRole} to ${newRole}`,
+      createdAt: new Date(),
+    });
+
+    return savedUser;
   }
 
-  async toggleStatus(id: number, status: string, adminId?: number) {
-    if (adminId && id === adminId && status === 'banned') {
+  async toggleVerifiedBadge(id: number, isVerified: boolean, adminId: number) {
+  const user = await this.findById(id);
+  if (!user) throw new NotFoundException('User not found');
+
+  user.isVerified = isVerified;
+  const savedUser = await this.usersRepository.save(user);
+
+  await this.auditLogRepository.save({
+    adminId: adminId,
+    action: 'VERIFIED_BADGE_TOGGLE',
+    targetUserId: id,
+    reason: `Manual verification badge set to ${isVerified}`,
+    createdAt: new Date(),
+  });
+
+  return savedUser;
+  }
+
+  // --- RESTORE, TOGGLE, DELETE ---
+
+  async restoreUser(userId: number, adminId: number) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      withDeleted: true, 
+    });
+
+    if (!user) throw new NotFoundException(`User with ID ${userId} not found.`);
+    if (!user.deletedAt) throw new BadRequestException('User is already active.');
+
+    await this.usersRepository.restore(userId);
+
+    await this.auditLogRepository.save({
+      adminId: adminId,
+      action: 'USER_RESTORED',
+      targetUserId: userId,
+      reason: 'Account restored by Administrator',
+      createdAt: new Date(),
+    });
+
+    return { message: 'User account successfully restored.', userId };
+  }
+
+  async toggleStatus(id: number, status: UserStatus, adminId?: number) {
+    // 1. SELF-PROTECTION
+    if (adminId && id === adminId && status === UserStatus.BANNED) {
       throw new BadRequestException('You cannot ban your own account!');
     }
 
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
+
+    // 2. NEW RANK-PROTECTION: Prevent banning other Admins
+    if (adminId && user.currentRole === UserRole.ADMIN && status === UserStatus.BANNED) {
+      throw new ForbiddenException('You do not have permission to ban another Administrator.');
+    }
     
     user.status = status;
+    if (status === UserStatus.BANNED) user.refreshToken = null;
 
-    if (status === 'banned') {
-      user.refreshToken = null;
+    const savedUser = await this.usersRepository.save(user);
+
+    if (adminId) {
+      await this.auditLogRepository.save({
+        adminId: adminId,
+        action: status === UserStatus.BANNED ? 'USER_BANNED' : 'USER_ACTIVATED',
+        targetUserId: id, 
+        reason: `User account status manually set to ${status} by Admin.`,
+        createdAt: new Date(),
+      });
     }
 
-    return await this.usersRepository.save(user);
+    return savedUser;
   }
 
   async softRemove(id: number, adminId: number) {
     if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
+
+    await this.auditLogRepository.save({
+      adminId: adminId,
+      action: 'USER_DELETED',
+      targetUserId: id, 
+      reason: 'User account soft-deleted', // Changed from 'details' to 'reason'
+      createdAt: new Date(),
+    });
+
     return await this.usersRepository.softDelete(id);
   }
 
   // --- CORE FINDERS ---
 
-  async findById(id: number): Promise<UserEntity | null> {
-    return this.usersRepository.createQueryBuilder('user')
+  async findById(id: number): Promise<any | null> {
+    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+    
+    const user = await this.usersRepository.createQueryBuilder('user')
       .leftJoinAndSelect('user.identityVerifications', 'verification')
       .where('user.id = :id', { id })
       .orderBy('verification.id', 'DESC')
       .getOne();
-  }
 
-  async findByEmail(email: string): Promise<UserEntity | null> {
-    return this.usersRepository.findOne({ where: { email } });
+    if (!user) return null;
+
+    if (user.identityVerifications) {
+      user.identityVerifications = user.identityVerifications.map(v => ({
+        ...v,
+        id_card_url: v.id_card_url ? `${baseUrl}/${v.id_card_url}` : null,
+        selfie_url: v.selfie_url ? `${baseUrl}/${v.selfie_url}` : null,
+      }));
+    }
+
+    return user;
   }
 
   async findAll(): Promise<UserEntity[]> {
     return this.usersRepository.find();
   }
 
+  async findByEmail(email: string): Promise<UserEntity | null> {
+    return this.usersRepository.findOne({ where: { email } });
+  }
+
   // --- AUTH & ACCOUNT MAINTENANCE ---
 
   async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
     const isInternal = registerDto.email.includes('@jomnus.admin');
+    const role = isInternal ? UserRole.ADMIN : UserRole.REQUESTER;
+
     const user = this.usersRepository.create({
       email: registerDto.email,
       password: registerDto.password,
       fullName: registerDto.fullName,
-      currentRole: isInternal ? UserRole.ADMIN : UserRole.REQUESTER,
+      currentRole: role,
       isIdentityVerified: isInternal,
-      status: 'active'
+      isPerformer: false,
+      status: UserStatus.ACTIVE
     });
 
     const savedUser = await this.usersRepository.save(user);
+    
     if (this.statsService) {
       await this.statsService.createInitialStats(savedUser);
     }

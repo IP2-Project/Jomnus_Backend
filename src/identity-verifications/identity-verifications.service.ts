@@ -3,16 +3,19 @@ import {
   NotFoundException, 
   BadRequestException, 
   ForbiddenException,
-  Logger
+  Logger,
+  Inject,     
+  forwardRef  
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, DataSource, In, Brackets } from 'typeorm';
 import { IdentityVerificationEntity, VerificationStatus } from './entities/identity-verification.entity';
 import { AuditLogEntity } from './entities/audit-log.entity';
-import { UserEntity } from '@/users/entity/user.entity';
+import { UserEntity, UserRole } from '@/users/entity/user.entity'; // Added UserRole import
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { IdentityGateway } from './identity.gateway'; 
+import { UsersService } from '@/users/users.service'; // Added UsersService import
 import * as fs from 'fs/promises'; 
 import * as path from 'path';
 
@@ -30,6 +33,9 @@ export class IdentityVerificationsService {
     private readonly notificationsService: NotificationsService,
     private readonly dataSource: DataSource,
     private readonly gateway: IdentityGateway,
+
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService, 
   ) {}
 
   /**
@@ -77,7 +83,7 @@ export class IdentityVerificationsService {
     const recentActivity = await this.auditLogRepo.find({
       order: { createdAt: 'DESC' },
       take: 5, 
-      relations: ['admin', 'targetUser'], // Updated to include targetUser for Activity Feed names
+      relations: ['admin', 'targetUser'],
     });
 
     return { totalPending, processedToday, processedAvatars, recentActivity };
@@ -90,9 +96,8 @@ export class IdentityVerificationsService {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    let verification = await this.verificationRepo.findOne({ where: { user_id: userId } });
+    let verification = await this.verificationRepo.findOne({ where: { user: { id: userId } } });
 
-    // Anti-spam check
     if (verification?.status === VerificationStatus.PENDING) {
       const now = new Date().getTime();
       const lastUpdate = new Date(verification.updated_at).getTime();
@@ -118,7 +123,7 @@ export class IdentityVerificationsService {
         result = await manager.save(verification);
       } else {
         const newRequest = manager.create(IdentityVerificationEntity, {
-          user_id: userId,
+          user: user,
           id_card_url: dto.id_card_url,
           selfie_url: dto.selfie_url,
           status: VerificationStatus.PENDING,
@@ -156,12 +161,15 @@ export class IdentityVerificationsService {
     return await this.dataSource.transaction(async (manager) => {
       const verification = await manager.findOne(IdentityVerificationEntity, { 
         where: { id },
-        lock: { mode: 'pessimistic_write' } 
+        relations: ['user'], 
       });
 
       if (!verification) throw new NotFoundException('Request not found');
 
-      // GUARD: Block approval if images are null
+      if (!verification.user) {
+        throw new BadRequestException('Cannot review: This record is not linked to a user.');
+      }
+
       if (dto.status === VerificationStatus.APPROVED) {
         if (!verification.id_card_url || !verification.selfie_url) {
           throw new BadRequestException('Cannot approve: Identity documents (ID or Selfie) are missing.');
@@ -180,20 +188,34 @@ export class IdentityVerificationsService {
       verification.rejection_reason = dto.status === VerificationStatus.REJECTED ? dto.rejection_reason : null;
       await manager.save(verification);
 
-      await manager.update(UserEntity, verification.user_id, {
-        isIdentityVerified: dto.status === VerificationStatus.APPROVED,
-      });
+      // UPDATED LOGIC: Sync with UsersService on Approval
+      if (dto.status === VerificationStatus.APPROVED) {
+        await manager.update(UserEntity, verification.user.id, {
+          isIdentityVerified: true,
+        });
+
+        // Promote to Performer and sync is_performer flag
+        await this.usersService.changeRole(
+          verification.user.id, 
+          UserRole.PERFORMER, 
+          adminId
+        );
+      } else {
+        await manager.update(UserEntity, verification.user.id, {
+          isIdentityVerified: false,
+        });
+      }
 
       await manager.save(AuditLogEntity, {
         action: dto.status,
         reason: dto.rejection_reason ?? undefined, 
-        targetUserId: verification.user_id,
+        targetUserId: verification.user.id,
         adminId: adminId,
       });
 
       const isApproved = dto.status === VerificationStatus.APPROVED;
       await this.notificationsService.createNotification({
-        user_id: verification.user_id,
+        user_id: verification.user.id,
         audience: 'user',
         title: isApproved ? 'Identity Verified' : 'Status Updated',
         message: isApproved ? 'Your identity is verified!' : `Rejected: ${dto.rejection_reason}`,
@@ -209,11 +231,19 @@ export class IdentityVerificationsService {
    * Resets a record to Pending (Rollback)
    */
   async resetToPending(id: number, adminId: number) {
-    const verification = await this.verificationRepo.findOne({ where: { id } });
+    const verification = await this.verificationRepo.findOne({ 
+      where: { id },
+      relations: ['user'] 
+    });
+
     if (!verification) throw new NotFoundException('Request not found');
+    
+    if (!verification.user) {
+      throw new BadRequestException('This record has no associated user.');
+    }
 
     return await this.dataSource.transaction(async (manager) => {
-      await manager.update(UserEntity, verification.user_id, { isIdentityVerified: false });
+      await manager.update(UserEntity, verification.user.id, { isIdentityVerified: false });
       
       verification.status = VerificationStatus.PENDING;
       verification.rejection_reason = null;
@@ -224,12 +254,12 @@ export class IdentityVerificationsService {
       await manager.save(AuditLogEntity, {
         action: 'RESET_TO_PENDING',
         reason: 'Admin manually reset verification to pending.',
-        targetUserId: verification.user_id,
+        targetUserId: verification.user.id,
         adminId: adminId,
       });
 
       await this.notificationsService.createNotification({
-        user_id: verification.user_id,
+        user_id: verification.user.id,
         audience: 'user',
         title: 'Verification Reset',
         message: 'Your identity verification has been reset to pending for re-review.',
@@ -245,8 +275,16 @@ export class IdentityVerificationsService {
    * Hard delete of physical images and reset
    */
   async clearVerificationImages(id: number, adminId: number) {
-    const verification = await this.verificationRepo.findOne({ where: { id } });
+    const verification = await this.verificationRepo.findOne({ 
+      where: { id },
+      relations: ['user']
+    });
+    
     if (!verification) throw new NotFoundException('Request not found');
+
+    if (!verification.user) {
+      throw new BadRequestException('Cannot clear images: No associated user found.');
+    }
 
     return await this.dataSource.transaction(async (manager) => {
       await this.deletePhysicalFiles([verification.id_card_url, verification.selfie_url]);
@@ -260,12 +298,12 @@ export class IdentityVerificationsService {
       await manager.save(AuditLogEntity, {
         action: 'IMAGES_CLEARED',
         reason: 'Admin manually deleted images from the system.',
-        targetUserId: verification.user_id,
+        targetUserId: verification.user.id,
         adminId: adminId,
       });
 
       await this.notificationsService.createNotification({
-        user_id: verification.user_id,
+        user_id: verification.user.id,
         audience: 'user',
         title: 'Action Required: Re-upload ID',
         message: 'Your verification images were cleared by an admin. Please upload clear copies of your ID and selfie.',
@@ -278,29 +316,22 @@ export class IdentityVerificationsService {
   }
 
   /**
-   * Paginated List - ULTRA STRICT VERSION
+   * Paginated List
    */
   async getPaginatedList(page: number, limit: number, search?: string, status?: string) {
     const skip = (page - 1) * limit;
-    
-    // Use environment variable for the base URL, or default to your local dev URL
     const baseUrl = process.env.APP_URL || 'http://localhost:3001';
-
-    this.logger.log(`Received Status: "${status}"`);
-    this.logger.log(`Received Search: "${search}"`);
 
     const queryBuilder = this.verificationRepo.createQueryBuilder('verification')
       .leftJoinAndSelect('verification.user', 'user') 
       .leftJoinAndSelect('verification.reviewer', 'reviewer')
       .where('1=1');
 
-    // 1. Filter by Status
     if (status && status.toUpperCase() !== 'ALL') {
       const upperStatus = status.toUpperCase();
       queryBuilder.andWhere('verification.status = :status', { status: upperStatus });
     }
 
-    // 2. Search by Name/Email
     if (search && search.trim() !== '') {
       const searchPattern = `%${search.trim()}%`;
       queryBuilder.andWhere(
@@ -317,8 +348,6 @@ export class IdentityVerificationsService {
 
     const [data, total] = await queryBuilder.getManyAndCount();
 
-    // 3. MAP THE DATA TO INCLUDE FULL URLs
-    // This turns "uploads/file.jpg" into "http://localhost:3001/uploads/file.jpg"
     const mappedData = data.map(item => ({
       ...item,
       id_card_url: item.id_card_url ? `${baseUrl}/${item.id_card_url}` : null,
@@ -337,12 +366,9 @@ export class IdentityVerificationsService {
     };
   }
 
-  /**
-   * Exports verification data to CSV with reviewer details
-   */
   async exportToCsv() {
     const data = await this.verificationRepo.find({
-      relations: ['user', 'reviewer'], // Updated for professional transparency
+      relations: ['user', 'reviewer'], 
       order: { created_at: 'DESC' },
     });
     
@@ -376,9 +402,6 @@ export class IdentityVerificationsService {
     }
   }
 
-  /**
-   * Fetches a single verification record with full details
-   */
   async getOne(id: number) {
     const baseUrl = process.env.APP_URL || 'http://localhost:3001';
     const verification = await this.verificationRepo.findOne({

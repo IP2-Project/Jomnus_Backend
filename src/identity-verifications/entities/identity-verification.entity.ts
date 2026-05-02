@@ -1,7 +1,7 @@
 import {
   Column,
   CreateDateColumn,
-  UpdateDateColumn, // Added this import
+  UpdateDateColumn,
   Entity,
   ManyToOne,
   JoinColumn,
@@ -20,10 +20,11 @@ export class IdentityVerificationEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ unique: true }) 
-  user_id!: number;
-
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  /**
+   * We remove the manual @Column({ user_id }) here.
+   * The @JoinColumn below will create the 'user_id' column in the database automatically.
+   */
+  @ManyToOne(() => UserEntity, (user) => user.identityVerifications, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 
@@ -56,7 +57,6 @@ export class IdentityVerificationEntity {
   @CreateDateColumn({ name: 'created_at' })
   created_at!: Date | null;
 
-  // Added this column to track the last activity for spam prevention
   @UpdateDateColumn({ name: 'updated_at' })
   updated_at!: Date;
 }

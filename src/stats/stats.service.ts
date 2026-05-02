@@ -16,14 +16,29 @@ export class StatsService {
     private requesterRepo: Repository<RequesterStats>,
   ) {}
 
-  async createInitialStats(user: UserEntity) {
-    await Promise.all([
-      this.performerRepo.save({
-        user_id: Number(user.id),
-      }),
-      this.requesterRepo.save({
-        user_id: Number(user.id),
-      }),
-    ]);
+async createInitialStats(user: UserEntity) {
+    const userId = Number(user.id);
+
+    // 1. Handle Performer Stats
+    const existingPerformer = await this.performerRepo.findOne({ 
+      where: { user_id: userId } 
+    });
+    
+    if (!existingPerformer) {
+      await this.performerRepo.save(this.performerRepo.create({
+        user_id: userId,
+      }));
+    }
+
+    // 2. Handle Requester Stats
+    const existingRequester = await this.requesterRepo.findOne({ 
+      where: { user_id: userId } 
+    });
+
+    if (!existingRequester) {
+      await this.requesterRepo.save(this.requesterRepo.create({
+        user_id: userId,
+      }));
+    }
   }
 }
