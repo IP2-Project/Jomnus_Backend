@@ -1,17 +1,18 @@
-// @/users/users.controller.ts
 import { 
   Controller, 
   Get, 
   Post, 
   Body, 
   Patch, 
-  Delete, // Added
+  Delete, 
   Param, 
   Query, 
   UseGuards, 
   Request, 
   ForbiddenException, 
-  ParseIntPipe 
+  ParseIntPipe,
+  UseInterceptors,
+  ClassSerializerInterceptor
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UserRole } from './entity/user.entity';
@@ -19,6 +20,7 @@ import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 
 @Controller('users')
+@UseInterceptors(ClassSerializerInterceptor) 
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -40,7 +42,8 @@ export class UsersController {
   @Patch(':id/verify-manually')
   async manualVerify(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
-    return this.usersService.manualVerify(id);
+    const adminId = req.user?.id || req.user?.sub;
+    return this.usersService.manualVerify(id, adminId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -67,7 +70,6 @@ export class UsersController {
     return this.usersService.toggleStatus(id, status, adminId);
   }
 
-  // LOGIC 1: Delete User Route
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async softDelete(@Param('id', ParseIntPipe) id: number, @Request() req) {

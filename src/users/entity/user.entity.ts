@@ -7,7 +7,7 @@ import {
   OneToOne,
   OneToMany,
   JoinColumn,
-  DeleteDateColumn, // Added for Soft Delete
+  DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
 import { Exclude } from 'class-transformer';
@@ -30,8 +30,9 @@ export class UserEntity extends BaseEntity {
   @Column({ unique: true })
   email!: string;
 
-  @Column()
+  // Hides password from all API responses
   @Exclude()
+  @Column()
   password!: string;
 
   @Column({ nullable: true })
@@ -81,19 +82,21 @@ export class UserEntity extends BaseEntity {
   @Column({ type: 'float', nullable: true })
   longitude?: number;
 
-  @Column({ name: 'refresh_token', type: 'text', nullable: true })
+  // Hides Refresh Token from API responses
   @Exclude()
+  @Column({ name: 'refresh_token', type: 'text', nullable: true })
   refreshToken?: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  // Hides OTP from API responses
   @Exclude()
+  @Column({ type: 'varchar', nullable: true })
   otp?: string | null;
 
-  @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
+  // Hides OTP Expiry from API responses
   @Exclude()
+  @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   otpExpiry?: Date | null;
 
-  // LOGIC 1: Soft Delete column
   @DeleteDateColumn({ name: 'deleted_at', nullable: true })
   deletedAt?: Date;
 

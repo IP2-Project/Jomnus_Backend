@@ -1,4 +1,3 @@
-// @/users/users.service.ts
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -19,6 +18,8 @@ export class UsersService {
     private statsService: StatsService,
   ) {}
 
+  // --- FIGMA DASHBOARD LOGIC ---
+
   async getPaginatedUsers(query: {
     page: number;
     limit: number;
@@ -26,26 +27,38 @@ export class UsersService {
     verified?: string;
     status?: string;
     search?: string;
+    pendingOnly?: string; // New filter for clicking the stats box
   }) {
-    const { page = 1, limit = 10, role, verified, status, search } = query;
+    const { page = 1, limit = 10, role, verified, status, search, pendingOnly } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
+    // 1. Filter for clicking "Pending Verifications" box
+    if (pendingOnly === 'true') {
+      queryBuilder
+        .innerJoin('user.identityVerifications', 'verification')
+        .andWhere('verification.status = :vStatus', { vStatus: 'PENDING' });
+    }
+
+    // 2. Role Filter
     if (role && role !== 'ALL') {
       queryBuilder.andWhere('user.currentRole = :role', { role });
     }
 
+    // 3. Verified Filter
     if (verified === 'true') {
       queryBuilder.andWhere('user.isIdentityVerified = true');
     } else if (verified === 'false') {
       queryBuilder.andWhere('user.isIdentityVerified = false');
     }
 
+    // 4. Status Filter
     if (status && status !== 'ALL') {
       queryBuilder.andWhere('user.status = :status', { status });
     }
 
+    // 5. Search Filter
     if (search) {
       queryBuilder.andWhere(
         '(user.fullName ILIKE :search OR user.email ILIKE :search)',
@@ -59,12 +72,16 @@ export class UsersService {
       .take(limit)
       .getManyAndCount();
 
-    const data = users.map(user => ({
-      ...user,
-      verificationStatus: user.currentRole === UserRole.ADMIN 
-        ? 'Internal' 
-        : user.isIdentityVerified ? 'Yes' : 'No'
-    }));
+    // Mapping and Data Sanitization
+    const data = users.map(user => {
+      const { password, refreshToken, otp, otpExpiry, ...safeUser } = user; 
+      return {
+        ...safeUser,
+        verificationStatus: user.currentRole === UserRole.ADMIN 
+          ? 'Internal' 
+          : user.isIdentityVerified ? 'Yes' : 'No'
+      };
+    });
 
     return {
       data,
@@ -82,13 +99,13 @@ export class UsersService {
     const pendingVerifications = await this.verificationRepository.count({
       where: { status: 'PENDING' } as any,
     });
-
     const totalUsers = await this.usersRepository.count();
-
     return { pendingVerifications, totalUsers };
   }
 
-  async manualVerify(id: number) {
+  // --- ADMIN ACTIONS ---
+
+  async manualVerify(id: number, adminId: number) {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
     
@@ -98,6 +115,8 @@ export class UsersService {
     if (user.identityVerifications && user.identityVerifications.length > 0) {
       const latestDoc = user.identityVerifications[0]; 
       latestDoc.status = 'APPROVED' as any;
+      latestDoc.reviewed_by = adminId;
+      latestDoc.reviewed_at = new Date();
       await this.verificationRepository.save(latestDoc);
     }
 
@@ -108,6 +127,10 @@ export class UsersService {
     const targetUser = await this.findById(userId);
     if (!targetUser) throw new NotFoundException('User not found');
 
+    if (newRole === UserRole.PERFORMER && !targetUser.isIdentityVerified) {
+      throw new BadRequestException('User must be identity verified before becoming a Performer.');
+    }
+
     if (targetUser.currentRole === UserRole.ADMIN && userId !== adminId) {
       throw new ForbiddenException('Cannot modify a fellow Administrator.');
     }
@@ -115,9 +138,6 @@ export class UsersService {
     if (adminId && userId === adminId && newRole !== UserRole.ADMIN) {
       throw new BadRequestException('You cannot remove your own Admin role.');
     }
-    
-    // AUDIT LOG: Track who changed the role
-    console.log(`[AUDIT] Admin ${adminId} changed User ${userId} role to ${newRole}`);
     
     targetUser.currentRole = newRole;
     if (newRole === UserRole.ADMIN) targetUser.isIdentityVerified = true;
@@ -135,12 +155,8 @@ export class UsersService {
     
     user.status = status;
 
-    // SESSION KILL & AUDIT: If banned, clear refresh token to force instant logout
     if (status === 'banned') {
       user.refreshToken = null;
-      console.log(`[AUDIT] User ${id} banned and session killed by Admin ${adminId}`);
-    } else {
-      console.log(`[AUDIT] User ${id} status updated to ${status} by Admin ${adminId}`);
     }
 
     return await this.usersRepository.save(user);
@@ -148,15 +164,12 @@ export class UsersService {
 
   async softRemove(id: number, adminId: number) {
     if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
-    
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
-
-    // AUDIT LOG: Track deletion
-    console.log(`[AUDIT] User ${id} soft-deleted by Admin ${adminId}`);
-
     return await this.usersRepository.softDelete(id);
   }
+
+  // --- CORE FINDERS ---
 
   async findById(id: number): Promise<UserEntity | null> {
     return this.usersRepository.createQueryBuilder('user')
@@ -170,9 +183,14 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { email } });
   }
 
+  async findAll(): Promise<UserEntity[]> {
+    return this.usersRepository.find();
+  }
+
+  // --- AUTH & ACCOUNT MAINTENANCE ---
+
   async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
     const isInternal = registerDto.email.includes('@jomnus.admin');
-
     const user = this.usersRepository.create({
       email: registerDto.email,
       password: registerDto.password,
@@ -198,10 +216,10 @@ export class UsersService {
   }
 
   async updatePassword(userId: number, password: string): Promise<void> {
-    await this.usersRepository.update(userId, { password });
-  }
-
-  async findAll(): Promise<UserEntity[]> {
-    return this.usersRepository.find();
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (user) {
+      user.password = password;
+      await this.usersRepository.save(user);
+    }
   }
 }
