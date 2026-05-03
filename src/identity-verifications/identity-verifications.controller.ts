@@ -2,7 +2,7 @@ import {
   Controller, Get, Patch, Post, Param, Body, ParseIntPipe, 
   Request, UseGuards, ForbiddenException, Logger, Query,
   UseInterceptors, UploadedFiles, BadRequestException, Response, Delete,
-  ClassSerializerInterceptor // 1. Added this import
+  ClassSerializerInterceptor 
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { IdentityVerificationsService } from './identity-verifications.service';
@@ -13,13 +13,13 @@ import { extname } from 'path';
 import type { Response as ExpressResponse } from 'express';
 
 @Controller('identity-verifications')
-@UseInterceptors(ClassSerializerInterceptor) // 2. Added this to protect all endpoints
+@UseInterceptors(ClassSerializerInterceptor)
 export class IdentityVerificationsController {
   private readonly logger = new Logger(IdentityVerificationsController.name);
 
   constructor(private readonly service: IdentityVerificationsService) {}
 
-  // 1. STATS (Matches Top Cards in Figma)
+  // --- ADMIN STATS ---
   @UseGuards(JwtAuthGuard)
   @Get('admin/stats')
   async getStats(@Request() req) {
@@ -27,7 +27,7 @@ export class IdentityVerificationsController {
     return this.service.getAdminStats();
   }
 
-  // 2. EXPORT CSV
+  // --- DATA EXPORT ---
   @UseGuards(JwtAuthGuard)
   @Get('export')
   async export(@Request() req, @Response({ passthrough: true }) res: ExpressResponse) {
@@ -40,7 +40,7 @@ export class IdentityVerificationsController {
     return csv;
   }
 
-  // 3. PAGINATED LIST
+  // --- LIST & SEARCH ---
   @UseGuards(JwtAuthGuard)
   @Get()
   async findAll(
@@ -54,7 +54,6 @@ export class IdentityVerificationsController {
     return this.service.getPaginatedList(page, limit, search, status); 
   }
 
-  // 3.5 GET SINGLE VERIFICATION (Deep Dive for Admin)
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number, @Request() req) {
@@ -62,7 +61,7 @@ export class IdentityVerificationsController {
     return this.service.getOne(id);
   }
 
-  // 4. SUBMIT VERIFICATION (User Action)
+  // --- USER SUBMISSION ---
   @UseGuards(JwtAuthGuard)
   @Post()
   @UseInterceptors(
@@ -93,7 +92,7 @@ export class IdentityVerificationsController {
     @Request() req,
     @UploadedFiles() files: { id_card?: Express.Multer.File[]; selfie?: Express.Multer.File[] },
   ) {
-    const userId = req.user?.id || req.user?.sub;
+    const userId = this.getUserId(req);
     if (!files?.id_card?.[0] || !files?.selfie?.[0]) {
       throw new BadRequestException('Both an ID Card image and a Selfie image are required.');
     }
@@ -104,7 +103,8 @@ export class IdentityVerificationsController {
     return this.service.create(userId, dto);
   }
 
-  // 5. REVIEW (Approve/Reject)
+  // --- REVIEW FLOW ---
+
   @UseGuards(JwtAuthGuard)
   @Patch(':id/review')
   async review(
@@ -113,32 +113,44 @@ export class IdentityVerificationsController {
     @Request() req,
   ) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
+    const adminId = this.getUserId(req);
     return this.service.review(id, adminId, dto);
   }
 
-  // 6. RESET
+  /**
+   * Logic Test 1: Admin Reset
+   * Reverts PERFORMER to REQUESTER and status to PENDING
+   */
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reset')
   async reset(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
+    const adminId = this.getUserId(req);
     return this.service.resetToPending(id, adminId);
   }
 
-  // 7. CLEAR IMAGES
+  /**
+   * Logic Test 2: Clear Images
+   * Moves files to archive and resets image paths
+   */
   @UseGuards(JwtAuthGuard)
-  @Delete(':id/images')
+  @Patch(':id/clear-images') // Changed to Patch to match service logic
   async clearImages(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
-    const adminId = req.user?.id || req.user?.sub;
+    const adminId = this.getUserId(req);
     return this.service.clearVerificationImages(id, adminId);
   }
+
+  // --- HELPERS ---
 
   private checkAdmin(req: any) {
     const userRole = req.user?.currentRole || req.user?.role || req.user?.current_role;
     if (userRole !== 'ADMIN') {
       throw new ForbiddenException(`Access denied. Admin privileges required.`);
     }
+  }
+
+  private getUserId(req: any): number {
+    return req.user?.id || req.user?.sub;
   }
 }

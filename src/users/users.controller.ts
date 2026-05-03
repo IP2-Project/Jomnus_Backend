@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UserRole } from './entity/user.entity';
+import { VerificationStatus } from '@/identity-verifications/entities/identity-verification.entity'; // Add this import
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
@@ -42,6 +43,44 @@ export class UsersController {
     return this.usersService.getAdminSummaryStats();
   }
 
+  // --- VERIFICATION WORKFLOW (New Figma Support) ---
+
+  /**
+   * Figma Match: Powers the "Pending Requests" tab
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('admin/pending-verifications')
+  async getPending(@Query('page') page: number, @Request() req) {
+    this.checkAdmin(req);
+    return this.usersService.getPendingVerifications(page || 1);
+  }
+
+  /**
+   * Figma Match: Review action (Approve/Reject) from the Identity service
+   */
+  @UseGuards(JwtAuthGuard)
+  @Patch('admin/review-verification/:id')
+  async reviewVerification(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: VerificationStatus,
+    @Body('reason') reason: string,
+    @Request() req
+  ) {
+    this.checkAdmin(req);
+    const adminId = this.getAdminId(req);
+    return this.usersService.reviewVerification(id, status, adminId, reason);
+  }
+
+  /**
+   * Figma Match: Activity Log/History for a specific user
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/audit-logs')
+  async getLogs(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    this.checkAdmin(req);
+    return this.usersService.getUserAuditLogs(id);
+  }
+
   // --- ADMIN ACTIONS ---
 
   @UseGuards(JwtAuthGuard)
@@ -64,10 +103,6 @@ export class UsersController {
     return this.usersService.changeRole(id, changeRoleDto.role, adminId);
   }
 
-  /**
-   * NEW: Toggles the "isVerified" (Blue Checkmark/Trusted) status
-   * This updates the 'Verified' column in Figma (image_a38738.jpg)
-   */
   @UseGuards(JwtAuthGuard)
   @Patch(':id/verified-badge')
   async toggleVerifiedBadge(

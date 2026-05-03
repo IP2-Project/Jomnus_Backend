@@ -1,12 +1,19 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { 
+  Injectable, 
+  NotFoundException, 
+  BadRequestException, 
+  ForbiddenException, 
+  Inject, 
+  forwardRef 
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { UserEntity, UserRole, UserStatus } from '@/users/entity/user.entity';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 import { StatsService } from '@/stats/stats.service';
 import { IdentityVerificationEntity, VerificationStatus } from '@/identity-verifications/entities/identity-verification.entity';
 import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.entity';
-import { DataSource } from 'typeorm';
+import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 import { plainToInstance } from 'class-transformer';
 
 @Injectable()
@@ -24,11 +31,14 @@ export class UsersService {
     private statsService: StatsService,
 
     private dataSource: DataSource,
+
+    @Inject(forwardRef(() => IdentityVerificationsService))
+    private readonly identityService: IdentityVerificationsService,
   ) {}
 
   // --- DASHBOARD LOGIC ---
 
-async getPaginatedUsers(query: {
+  async getPaginatedUsers(query: {
     page: number;
     limit: number;
     role?: string;
@@ -37,33 +47,27 @@ async getPaginatedUsers(query: {
     search?: string;
     pendingOnly?: string;
   }) {
-    const { page = 1, limit = 10, role, verified, status, search, pendingOnly } = query;
+    const { page = 1, limit = 10, role, status, search, pendingOnly } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
-    // Filter for BANNED (soft-deleted) vs ACTIVE
     if (status === 'BANNED') {
-      queryBuilder
-        .withDeleted()
-        .where('user.deletedAt IS NOT NULL');
+      queryBuilder.withDeleted().where('user.deletedAt IS NOT NULL');
     } else if (status === 'ACTIVE') {
       queryBuilder.where('user.deletedAt IS NULL');
     }
 
-    // Filter for pending identity verifications
     if (pendingOnly === 'true') {
       queryBuilder
         .innerJoin('user.identityVerifications', 'verification')
-        .andWhere('verification.status = :vStatus', { vStatus: 'PENDING' });
+        .andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
     }
 
-    // Role filtering
     if (role && role !== 'ALL') {
       queryBuilder.andWhere('user.currentRole = :role', { role });
     }
 
-    // Search logic
     if (search) {
       queryBuilder.andWhere(
         '(user.fullName ILIKE :search OR user.email ILIKE :search)',
@@ -77,23 +81,22 @@ async getPaginatedUsers(query: {
       .take(limit)
       .getManyAndCount();
 
-    // MAP DATA & FIX EXCLUDE BUG
     const data = users.map(user => {
       let vLabel = 'No';
       if (user.currentRole === UserRole.ADMIN) {
         vLabel = 'Internal';
-      } else if (user.isIdentityVerified) {
-        vLabel = user.isVerified ? 'Verified' : 'Yes';
+      } else {
+        // Priority logic for Figma: Verified Badge (Blue Check) > Identity Verified (ID Card)
+        if (user.isVerified) vLabel = 'Verified';
+        else if (user.isIdentityVerified) vLabel = 'Yes';
       }
 
-      // Create a plain object first
       const plainObject = {
         ...user,
         verificationStatus: vLabel,
         displayStatus: user.deletedAt ? 'Banned' : 'Active' 
       };
 
-      // Convert back to UserEntity instance so @Exclude() works
       return plainToInstance(UserEntity, plainObject);
     });
 
@@ -111,10 +114,29 @@ async getPaginatedUsers(query: {
   
   async getAdminSummaryStats() {
     const pendingVerifications = await this.verificationRepository.count({
-      where: { status: 'PENDING' } as any,
+      where: { status: VerificationStatus.PENDING },
     });
     const totalUsers = await this.usersRepository.count();
     return { pendingVerifications, totalUsers };
+  }
+
+  // --- IDENTITY WORKFLOW BRIDGES ---
+
+  async reviewVerification(id: number, status: VerificationStatus, adminId: number, reason?: string) {
+    return this.identityService.review(id, adminId, { status, rejection_reason: reason });
+  }
+
+  async getPendingVerifications(page: number, limit: number = 10) {
+    return this.identityService.getPaginatedList(page, limit, '', 'PENDING');
+  }
+
+  async getUserAuditLogs(userId: number) {
+    return this.auditLogRepository.find({
+      where: { targetUserId: userId },
+      relations: ['admin'],
+      order: { createdAt: 'DESC' },
+      take: 20
+    });
   }
 
   // --- ADMIN ACTIONS ---
@@ -128,13 +150,10 @@ async getPaginatedUsers(query: {
       
       if (!user) throw new NotFoundException('User not found');
 
-      if (user.isIdentityVerified && user.status === UserStatus.ACTIVE) {
-        throw new BadRequestException('This user is already verified and active.');
-      }
-
       user.isIdentityVerified = true;
+      user.isPerformer = true;               
+      user.currentRole = UserRole.PERFORMER; 
       user.status = UserStatus.ACTIVE;
-      user.isPerformer = (user.currentRole === UserRole.PERFORMER);
       
       await manager.save(user);
 
@@ -162,7 +181,7 @@ async getPaginatedUsers(query: {
       }
 
       await manager.save(AuditLogEntity, {
-        adminId: adminId,
+        adminId,
         action: 'MANUAL_VERIFICATION',
         targetUserId: userId, 
         reason: 'Bypassed document upload via Admin panel.',
@@ -174,23 +193,12 @@ async getPaginatedUsers(query: {
   }
 
   async changeRole(userId: number, newRole: UserRole, adminId: number) {
-    if (userId === adminId) {
-      throw new BadRequestException('Admins cannot change their own roles.');
-    }
+    if (userId === adminId) throw new BadRequestException('Admins cannot change their own roles.');
 
     const targetUser = await this.findById(userId);
     if (!targetUser) throw new NotFoundException('User not found');
 
-    if (targetUser.currentRole === UserRole.ADMIN && newRole !== UserRole.ADMIN) {
-      throw new ForbiddenException('You do not have permission to demote another Administrator.');
-    }
-
-    if (newRole === UserRole.PERFORMER && !targetUser.isIdentityVerified) {
-      throw new BadRequestException('User must be identity verified before becoming a Performer.');
-    }
-
     const oldRole = targetUser.currentRole;
-    
     targetUser.currentRole = newRole;
     targetUser.isPerformer = (newRole === UserRole.PERFORMER);
 
@@ -201,7 +209,7 @@ async getPaginatedUsers(query: {
     }
 
     await this.auditLogRepository.save({
-      adminId: adminId,
+      adminId,
       action: 'ROLE_CHANGE',
       targetUserId: userId,
       reason: `Role changed from ${oldRole} to ${newRole}`,
@@ -212,24 +220,22 @@ async getPaginatedUsers(query: {
   }
 
   async toggleVerifiedBadge(id: number, isVerified: boolean, adminId: number) {
-  const user = await this.findById(id);
-  if (!user) throw new NotFoundException('User not found');
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
 
-  user.isVerified = isVerified;
-  const savedUser = await this.usersRepository.save(user);
+    user.isVerified = isVerified;
+    const savedUser = await this.usersRepository.save(user);
 
-  await this.auditLogRepository.save({
-    adminId: adminId,
-    action: 'VERIFIED_BADGE_TOGGLE',
-    targetUserId: id,
-    reason: `Manual verification badge set to ${isVerified}`,
-    createdAt: new Date(),
-  });
+    await this.auditLogRepository.save({
+      adminId,
+      action: 'VERIFIED_BADGE_TOGGLE',
+      targetUserId: id,
+      reason: `Manual verification badge set to ${isVerified}`,
+      createdAt: new Date(),
+    });
 
-  return savedUser;
+    return savedUser;
   }
-
-  // --- RESTORE, TOGGLE, DELETE ---
 
   async restoreUser(userId: number, adminId: number) {
     const user = await this.usersRepository.findOne({
@@ -238,12 +244,10 @@ async getPaginatedUsers(query: {
     });
 
     if (!user) throw new NotFoundException(`User with ID ${userId} not found.`);
-    if (!user.deletedAt) throw new BadRequestException('User is already active.');
-
     await this.usersRepository.restore(userId);
 
     await this.auditLogRepository.save({
-      adminId: adminId,
+      adminId,
       action: 'USER_RESTORED',
       targetUserId: userId,
       reason: 'Account restored by Administrator',
@@ -254,18 +258,12 @@ async getPaginatedUsers(query: {
   }
 
   async toggleStatus(id: number, status: UserStatus, adminId?: number) {
-    // 1. SELF-PROTECTION
     if (adminId && id === adminId && status === UserStatus.BANNED) {
       throw new BadRequestException('You cannot ban your own account!');
     }
 
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('User not found');
-
-    // 2. NEW RANK-PROTECTION: Prevent banning other Admins
-    if (adminId && user.currentRole === UserRole.ADMIN && status === UserStatus.BANNED) {
-      throw new ForbiddenException('You do not have permission to ban another Administrator.');
-    }
     
     user.status = status;
     if (status === UserStatus.BANNED) user.refreshToken = null;
@@ -274,10 +272,10 @@ async getPaginatedUsers(query: {
 
     if (adminId) {
       await this.auditLogRepository.save({
-        adminId: adminId,
+        adminId,
         action: status === UserStatus.BANNED ? 'USER_BANNED' : 'USER_ACTIVATED',
         targetUserId: id, 
-        reason: `User account status manually set to ${status} by Admin.`,
+        reason: `User status set to ${status} by Admin.`,
         createdAt: new Date(),
       });
     }
@@ -285,21 +283,30 @@ async getPaginatedUsers(query: {
     return savedUser;
   }
 
-  async softRemove(id: number, adminId: number) {
-    if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
-    const user = await this.findById(id);
-    if (!user) throw new NotFoundException('User not found');
+ async softRemove(id: number, adminId: number) {
+  if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
+  
+  const user = await this.findById(id);
+  if (!user) throw new NotFoundException('User not found');
 
-    await this.auditLogRepository.save({
-      adminId: adminId,
+  return await this.dataSource.transaction(async (manager) => {
+    // 1. PHYSICAL SYNC: Archive ID files before the user record is hidden
+    // This calls the logic that moves files to /archive-identity
+    await this.identityService.clearVerificationImages(id, adminId);
+
+    // 2. AUDIT SYNC: Log the deletion and the archival
+    await manager.save(AuditLogEntity, {
+      adminId,
       action: 'USER_DELETED',
       targetUserId: id, 
-      reason: 'User account soft-deleted', // Changed from 'details' to 'reason'
+      reason: 'User account soft-deleted and identity files archived for privacy.',
       createdAt: new Date(),
     });
 
-    return await this.usersRepository.softDelete(id);
-  }
+    // 3. DATABASE SYNC: Mark the user as soft-deleted
+    return await manager.softDelete(UserEntity, id);
+  });
+}
 
   // --- CORE FINDERS ---
 
@@ -317,8 +324,8 @@ async getPaginatedUsers(query: {
     if (user.identityVerifications) {
       user.identityVerifications = user.identityVerifications.map(v => ({
         ...v,
-        id_card_url: v.id_card_url ? `${baseUrl}/${v.id_card_url}` : null,
-        selfie_url: v.selfie_url ? `${baseUrl}/${v.selfie_url}` : null,
+        id_card_url: v.id_card_url && v.id_card_url !== 'MANUAL_BYPASS' ? `${baseUrl}/${v.id_card_url}` : v.id_card_url,
+        selfie_url: v.selfie_url && v.selfie_url !== 'MANUAL_BYPASS' ? `${baseUrl}/${v.selfie_url}` : v.selfie_url,
       }));
     }
 
@@ -333,16 +340,14 @@ async getPaginatedUsers(query: {
     return this.usersRepository.findOne({ where: { email } });
   }
 
-  // --- AUTH & ACCOUNT MAINTENANCE ---
+  // --- AUTH & MAINTENANCE ---
 
   async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
     const isInternal = registerDto.email.includes('@jomnus.admin');
     const role = isInternal ? UserRole.ADMIN : UserRole.REQUESTER;
 
     const user = this.usersRepository.create({
-      email: registerDto.email,
-      password: registerDto.password,
-      fullName: registerDto.fullName,
+      ...registerDto,
       currentRole: role,
       isIdentityVerified: isInternal,
       isPerformer: false,
