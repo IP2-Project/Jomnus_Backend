@@ -38,79 +38,91 @@ export class UsersService {
 
   // --- DASHBOARD LOGIC ---
 
-  async getPaginatedUsers(query: {
-    page: number;
-    limit: number;
-    role?: string;
-    verified?: string;
-    status?: string;
-    search?: string;
-    pendingOnly?: string;
-  }) {
-    const { page = 1, limit = 10, role, status, search, pendingOnly } = query;
-    const skip = (page - 1) * limit;
+async getPaginatedUsers(query: {
+  page: number;
+  limit: number;
+  role?: string;
+  verified?: string;
+  status?: string;
+  search?: string;
+  pendingOnly?: string;
+}) {
+  const { page = 1, limit = 10, role, status, search, pendingOnly, verified } = query;
+  const skip = (page - 1) * limit;
 
-    const queryBuilder = this.usersRepository.createQueryBuilder('user');
+  // Initialize query builder
+  const queryBuilder = this.usersRepository.createQueryBuilder('user');
 
-    if (status === 'BANNED') {
-      queryBuilder.withDeleted().where('user.deletedAt IS NOT NULL');
-    } else if (status === 'ACTIVE') {
-      queryBuilder.where('user.deletedAt IS NULL');
-    }
+  // 1. STATUS FILTER (Matches Figma Tabs)
+  if (status === 'BANNED') {
+    // We must include soft-deleted records to see 'Banned' users
+    queryBuilder
+      .withDeleted() 
+      .where('user.deletedAt IS NOT NULL');
+  } else {
+    // Default to ACTIVE: TypeORM handles 'deletedAt IS NULL' automatically 
+    // unless withDeleted() is called.
+    queryBuilder.where('user.deletedAt IS NULL');
+  }
 
-    if (pendingOnly === 'true') {
-      queryBuilder
-        .innerJoin('user.identityVerifications', 'verification')
-        .andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
-    }
+  // 2. PENDING FILTER
+  if (pendingOnly === 'true') {
+    queryBuilder
+      .innerJoin('user.identityVerifications', 'verification')
+      .andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
+  }
 
-    if (role && role !== 'ALL') {
-      queryBuilder.andWhere('user.currentRole = :role', { role });
-    }
+  // 3. ROLE FILTER (e.g., ADMIN, PERFORMER, REQUESTER)
+  if (role && role !== 'ALL') {
+    queryBuilder.andWhere('user.currentRole = :role', { role });
+  }
 
-    if (search) {
-      queryBuilder.andWhere(
-        '(user.fullName ILIKE :search OR user.email ILIKE :search)',
-        { search: `%${search}%` }
-      );
-    }
+  // 4. VERIFIED FILTER (Missing in your snippet, but in Figma)
+  if (verified === 'true') {
+    queryBuilder.andWhere('(user.isVerified = true OR user.isIdentityVerified = true)');
+  }
 
-    const [users, total] = await queryBuilder
-      .orderBy('user.id', 'DESC')
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+  // 5. SEARCH FILTER
+  if (search) {
+    queryBuilder.andWhere(
+      '(user.fullName ILIKE :search OR user.email ILIKE :search)',
+      { search: `%${search}%` }
+    );
+  }
 
+  const [users, total] = await queryBuilder
+    .orderBy('user.id', 'DESC')
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+
+  // 6. DATA MAPPING (Matches Figma Labels)
     const data = users.map(user => {
       let vLabel = 'No';
       if (user.currentRole === UserRole.ADMIN) {
         vLabel = 'Internal';
-      } else {
-        // Priority logic for Figma: Verified Badge (Blue Check) > Identity Verified (ID Card)
-        if (user.isVerified) vLabel = 'Verified';
-        else if (user.isIdentityVerified) vLabel = 'Yes';
+      } else if (user.isVerified || user.isIdentityVerified) {
+        vLabel = 'Yes';
       }
 
-      const plainObject = {
+    return {
         ...user,
         verificationStatus: vLabel,
-        displayStatus: user.deletedAt ? 'Banned' : 'Active' 
+        displayStatus: user.deletedAt ? 'Banned' : 'Active'
       };
+  });
 
-      return plainToInstance(UserEntity, plainObject);
-    });
-
-    return {
-      data,
-      meta: {
-        totalItems: total,
-        itemCount: data.length,
-        itemsPerPage: Number(limit),
-        totalPages: Math.ceil(total / limit),
-        currentPage: Number(page),
-      },
-    };
-  }
+  return {
+    data,
+    meta: {
+      totalItems: total,
+      itemCount: data.length,
+      itemsPerPage: Number(limit),
+      totalPages: Math.ceil(total / limit),
+      currentPage: Number(page),
+    },
+  };
+}
   
   async getAdminSummaryStats() {
     const pendingVerifications = await this.verificationRepository.count({

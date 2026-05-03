@@ -9,7 +9,7 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
-import { Exclude } from 'class-transformer';
+import { Exclude, Expose } from 'class-transformer'; // Added Expose
 import * as bcrypt from 'bcrypt';
 import { PerformerStats } from '@/stats/entities/performer-stats.entity';
 import { RequesterStats } from '@/stats/entities/requester-stats.entity';
@@ -53,10 +53,6 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'is_verified', default: false })
   isVerified!: boolean;
 
-  /**
-   * We use @Exclude() here so 'isPerformer' doesn't show up in JSON.
-   * TypeORM maps this to 'is_performer' column in Postgres.
-   */
   @Exclude({ toPlainOnly: true }) 
   @Column({ name: 'is_performer', default: false })
   isPerformer!: boolean;
@@ -75,6 +71,14 @@ export class UserEntity extends BaseEntity {
     default: UserStatus.ACTIVE,
   })
   status!: UserStatus;
+
+  // --- FIGMA VIRTUAL FIELDS ---
+  // Added @Expose so these stay visible during serialization
+  @Expose()
+  verificationStatus?: string;
+
+  @Expose()
+  displayStatus?: string;
 
   @Column({ nullable: true })
   bio?: string;

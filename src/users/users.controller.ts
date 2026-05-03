@@ -152,12 +152,13 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  async findAll(@Request() req) {
-    this.checkAdmin(req);
-    return this.usersService.findAll();
-  }
+// Replace your old findAll with this:
+@UseGuards(JwtAuthGuard)
+@Get()
+async findAll(@Query() query: any, @Request() req) {
+  this.checkAdmin(req); // Keep it secure
+  return this.usersService.getPaginatedUsers(query);
+}
 
   @Post()
   create(@Body() registerDto: RegisterAuthDto) {
