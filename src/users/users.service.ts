@@ -249,25 +249,31 @@ async getPaginatedUsers(query: {
     return savedUser;
   }
 
-  async restoreUser(userId: number, adminId: number) {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-      withDeleted: true, 
-    });
+async restoreUser(userId: number, adminId: number) {
+  const user = await this.usersRepository.findOne({
+    where: { id: userId },
+    withDeleted: true, 
+  });
 
-    if (!user) throw new NotFoundException(`User with ID ${userId} not found.`);
-    await this.usersRepository.restore(userId);
+  if (!user) throw new NotFoundException(`User with ID ${userId} not found.`);
 
-    await this.auditLogRepository.save({
-      adminId,
-      action: 'USER_RESTORED',
-      targetUserId: userId,
-      reason: 'Account restored by Administrator',
-      createdAt: new Date(),
-    });
+  // 1. DATABASE SYNC: Clear deletedAt
+  await this.usersRepository.restore(userId);
 
-    return { message: 'User account successfully restored.', userId };
-  }
+  // 2. STATUS SYNC: Reset enum to active
+  await this.usersRepository.update(userId, { status: UserStatus.ACTIVE });
+
+  // 3. AUDIT SYNC
+  await this.auditLogRepository.save({
+    adminId,
+    action: 'USER_RESTORED',
+    targetUserId: userId,
+    reason: 'Account restored by Administrator',
+    createdAt: new Date(),
+  });
+
+  return { message: 'User account successfully restored.', userId };
+}
 
   async toggleStatus(id: number, status: UserStatus, adminId?: number) {
     if (adminId && id === adminId && status === UserStatus.BANNED) {
@@ -295,18 +301,21 @@ async getPaginatedUsers(query: {
     return savedUser;
   }
 
- async softRemove(id: number, adminId: number) {
+// Banned Function 
+async softRemove(id: number, adminId: number) {
   if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
   
   const user = await this.findById(id);
   if (!user) throw new NotFoundException('User not found');
 
   return await this.dataSource.transaction(async (manager) => {
-    // 1. PHYSICAL SYNC: Archive ID files before the user record is hidden
-    // This calls the logic that moves files to /archive-identity
+    // 1. PHYSICAL SYNC: Archive ID files
     await this.identityService.clearVerificationImages(id, adminId);
 
-    // 2. AUDIT SYNC: Log the deletion and the archival
+    // 2. STATUS SYNC: Set the status enum to BANNED
+    await manager.update(UserEntity, id, { status: UserStatus.BANNED });
+
+    // 3. AUDIT SYNC
     await manager.save(AuditLogEntity, {
       adminId,
       action: 'USER_DELETED',
@@ -315,7 +324,7 @@ async getPaginatedUsers(query: {
       createdAt: new Date(),
     });
 
-    // 3. DATABASE SYNC: Mark the user as soft-deleted
+    // 4. DATABASE SYNC: Mark as soft-deleted (sets deletedAt)
     return await manager.softDelete(UserEntity, id);
   });
 }
