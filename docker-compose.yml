@@ -35,7 +35,7 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
       - CORS_ORIGINS=${CORS_ORIGINS}
-    command: sh -c "npx ts-node -r tsconfig-paths/register -r reflect-metadata ./node_modules/typeorm/cli.js migration:run -d ormconfig.ts && npm run start:dev"
+    command: npm run start:dev
     restart: unless-stopped
     depends_on:
       db:

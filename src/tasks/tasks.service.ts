@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -18,8 +22,23 @@ export class TasksService {
     @InjectRepository(TaskCategory)
     private taskCategoryRepo: Repository<TaskCategory>,
 
-    private categoriesService: CategoriesService,    
+    private categoriesService: CategoriesService,
   ) {}
+
+  private mapTaskWithRequester(task: TaskEntity, categories?: unknown) {
+    const { requester, ...taskData } = task;
+
+    return {
+      ...taskData,
+      requester: requester
+        ? {
+            fullName: requester.fullName,
+            profile_image: requester.profileImage,
+          }
+        : undefined,
+      ...(categories ? { categories } : {}),
+    };
+  }
 
   async create(dto: CreateTaskDto, userId: number) {
     const task = await this.taskRepo.save({
@@ -47,20 +66,18 @@ export class TasksService {
   }
 
   async findAll() {
-    const tasks = await this.taskRepo.find({
+    return this.taskRepo.find({
+      relations: ['requester'],
       order: { created_at: 'DESC' },
     });
-
-    return Promise.all(
-      tasks.map(task => this.findOne(task.id))
-    );
   }
+
 
   async findOne(id: number) {
     const task = await this.taskRepo.findOne({
       where: { id },
+      relations: ['requester'],
     });
-
 
     if (!task) {
       throw new NotFoundException('Task not found');
@@ -69,26 +86,25 @@ export class TasksService {
       where: { task_id: id },
     });
 
-    const categoryIds = taskCategories.map(tc => tc.category_id);
+    const categoryIds = taskCategories.map((tc) => tc.category_id);
 
     const categories = categoryIds.length
       ? await this.categoriesService.findByIds(categoryIds)
       : [];
 
-    return {
-      ...task,
-      categories,
-    };
+    return this.mapTaskWithRequester(task, categories);
   }
 
-  findByUser(userId: number) {
-    return this.taskRepo.find({
+  async findByUser(userId: number) {
+    const tasks = await this.taskRepo.find({
       where: { requester_id: userId },
+      relations: ['requester'],
     });
+
+    return tasks.map((task) => this.mapTaskWithRequester(task));
   }
 
   async update(id: number, dto: UpdateTaskDto, user: UserEntity) {
-
     const task = await this.taskRepo.findOne({ where: { id } });
 
     if (!task) {

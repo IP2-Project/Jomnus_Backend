@@ -15,6 +15,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
+import { GetUser } from '@/common/decorators/get-user.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
@@ -29,6 +30,11 @@ export class TasksController {
   @Get()
   findAll() {
     return this.tasksService.findAll();
+  }
+
+  @Get('me')
+  getMyTasks(@GetUser('id') userId: number) {
+    return this.tasksService.findByUser(userId);
   }
 
   @Get('user/:id')
