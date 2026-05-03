@@ -1,17 +1,23 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { UsersController } from './users.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserEntity } from './entity/user.entity';
 import { StatsModule } from '@/stats/stats.module';
-import { UserController } from './users.controller';
-import { UsersService } from './users.service';
+// 1. Import the actual Module, not just the entity
+import { IdentityVerificationsModule } from '@/identity-verifications/identity-verifications.module';
+import { UsersCleanupService } from './users-cleanup.service';
+
+
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserEntity]),
-    forwardRef(() => StatsModule), // ✅ FIX
+    StatsModule,
+    forwardRef(() => IdentityVerificationsModule), // 👈 Use forwardRef here
   ],
-  controllers: [UserController],
-  providers: [UsersService],
-  exports: [UsersService],
+  controllers: [UsersController],
+  providers: [UsersService, UsersCleanupService],
+  exports: [UsersService]
 })
 export class UsersModule {}

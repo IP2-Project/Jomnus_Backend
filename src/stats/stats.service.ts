@@ -16,38 +16,49 @@ export class StatsService {
     private readonly userRepo: Repository<UserEntity>,
   ) {}
 
-  async createDefaultStats(userId: number) {
-    const user = await this.userRepo.findOneBy({ id: userId });
+  /**
+   * COMBINED LOGIC: Uses your UserEntity parameter (faster) 
+   * but uses Incoming's detailed default values (0s).
+   */
+  async createInitialStats(user: UserEntity) {
+    const userId = Number(user.id);
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+    // 1. Handle Performer Stats
+    const existingPerformer = await this.performerRepo.findOne({ 
+      where: { user: { id: userId } } 
+    });
+    
+    if (!existingPerformer) {
+      await this.performerRepo.save(this.performerRepo.create({
+        user: user,
+        completed_tasks: 0,
+        avg_rating: 0,
+        success_rate: 0,
+        total_earnings: 0,
+        response_time: 0,
+      }));
     }
 
-    const performer = this.performerRepo.create({
-      user: user,
-      completed_tasks: 0,
-      avg_rating: 0,
-      success_rate: 0,
-      total_earnings: 0,
-      response_time: 0,
+    // 2. Handle Requester Stats
+    const existingRequester = await this.requesterRepo.findOne({ 
+      where: { user: { id: userId } } 
     });
 
-    const requester = this.requesterRepo.create({
-      user: user,
-      tasks_posted: 0,
-      tasks_verified: 0,
-      total_spent: 0,
-    });
-
-    await this.performerRepo.save(performer);
-    await this.requesterRepo.save(requester);
-
-    return { performer, requester };
+    if (!existingRequester) {
+      await this.requesterRepo.save(this.requesterRepo.create({
+        user: user,
+        tasks_posted: 0,
+        tasks_verified: 0,
+        total_spent: 0,
+      }));
+    }
   }
+
+  // KEEP THESE: These were in Incoming and are necessary for the Dashboard/Profiles
   async getPerformerStats(userId: string): Promise<PerformerStats> {
     const stats = await this.performerRepo.findOne({
       where: { user: { id: Number(userId) } },
-      relations: ['user'], // Load the user to check the role
+      relations: ['user'],
     });
     
     if (!stats) {
@@ -55,7 +66,6 @@ export class StatsService {
       throw new NotFoundException('Stats not found');
     }
 
-    // CHECK ROLE HERE
     if (stats.user.currentRole !== 'PERFORMER') {
       throw new ForbiddenException('User is not currently a Performer');
     }
@@ -66,7 +76,7 @@ export class StatsService {
   async getRequesterStats(userId: string): Promise<RequesterStats> {
     const stats = await this.requesterRepo.findOne({
       where: { user: { id: Number(userId) } },
-      relations: ['user'], // We need this to see the currentRole
+      relations: ['user'],
     });
 
     if (!stats) {
@@ -74,7 +84,6 @@ export class StatsService {
       throw new NotFoundException('Requester statistics not found');
     }
 
-    // Add this logic to block the wrong role:
     if (stats.user.currentRole !== 'REQUESTER') {
       throw new ForbiddenException('User is not currently a Requester');
     }
@@ -86,5 +95,4 @@ export class StatsService {
     const user = await this.userRepo.findOneBy({ id: Number(userId) });
     if (!user) throw new NotFoundException('User not found');
   }
-  
 }

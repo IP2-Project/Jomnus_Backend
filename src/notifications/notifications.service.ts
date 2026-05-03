@@ -10,6 +10,11 @@ export class NotificationsService {
     private readonly notificationRepo: Repository<Notification>,
   ) {}
 
+  // --- GENERIC METHOD (Prevents Merge Conflicts) ---
+  async createNotification(data: Partial<Notification>) {
+    const notification = this.notificationRepo.create(data);
+    return await this.notificationRepo.save(notification);
+  }
 
   private async sendToUser(userId: number, title: string, message: string, taskId?: number) {
     const notification = this.notificationRepo.create({
@@ -21,7 +26,6 @@ export class NotificationsService {
     });
     return this.notificationRepo.save(notification);
   }
-
 
   async notifyApplicationAccepted(performerId: number, taskTitle: string, taskId: number) {
     return this.sendToUser(performerId, 'Application Accepted ', `Congratulations! You have been chosen to complete: ${taskTitle}.`, taskId);
@@ -39,7 +43,7 @@ export class NotificationsService {
     return this.sendToUser(receiverId, 'Proof Ready for Review ', `A performer has submitted proof for "${taskTitle}". Please review it.`, taskId);
   }
 
-    async getUserNotifications(userId: number) {
+  async getUserNotifications(userId: number) {
     const notifications = await this.notificationRepo.find({
       where: { user_id: userId },
       order: { created_at: 'DESC' },
@@ -55,7 +59,7 @@ export class NotificationsService {
     };
   }
 
-    private async sendToAdmins(title: string, message: string, taskId?: number) {
+  private async sendToAdmins(title: string, message: string, taskId?: number) {
     const notification = this.notificationRepo.create({
       user_id: null,
       audience: 'admin',
@@ -73,7 +77,6 @@ export class NotificationsService {
   async notifyAdminReportedTask(taskId: number, reason: string) {
     return this.sendToAdmins('Task Flagged ', `Task #${taskId} has been reported for: ${reason}. Please investigate.`, taskId);
   }
-
 
   async getAdminNotifications() {
     const notifications = await this.notificationRepo.find({
@@ -103,6 +106,7 @@ export class NotificationsService {
     notification.is_read = true;
     return await this.notificationRepo.save(notification);
   }
+
   async markAllAsRead(userId: number) {
     await this.notificationRepo.update(
       { user_id: userId, is_read: false },
