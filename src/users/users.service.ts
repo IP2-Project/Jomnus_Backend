@@ -153,56 +153,69 @@ async getPaginatedUsers(query: {
 
   // --- ADMIN ACTIONS ---
 
-  async manualVerify(userId: number, adminId: number) {
-    return await this.dataSource.transaction(async (manager) => {
-      const user = await manager.findOne(UserEntity, { 
-        where: { id: userId },
-        relations: ['identityVerifications'] 
-      });
-      
-      if (!user) throw new NotFoundException('User not found');
-
-      user.isIdentityVerified = true;
-      user.isPerformer = true;               
-      user.currentRole = UserRole.PERFORMER; 
-      user.status = UserStatus.ACTIVE;
-      
-      await manager.save(user);
-
-      let verification = await manager.findOne(IdentityVerificationEntity, {
-        where: { user: { id: userId } }
-      });
-
-      if (verification) {
-        verification.status = VerificationStatus.APPROVED;
-        verification.rejection_reason = 'Manually verified by Administrator';
-        verification.reviewed_by = adminId;
-        verification.reviewed_at = new Date();
-        await manager.save(verification);
-      } else {
-        const newVerify = manager.create(IdentityVerificationEntity, {
-          user: user,
-          status: VerificationStatus.APPROVED,
-          rejection_reason: 'Manually verified by Administrator',
-          reviewed_by: adminId,
-          reviewed_at: new Date(),
-          id_card_url: 'MANUAL_BYPASS',
-          selfie_url: 'MANUAL_BYPASS',
-        });
-        await manager.save(newVerify);
-      }
-
-      await manager.save(AuditLogEntity, {
-        adminId,
-        action: 'MANUAL_VERIFICATION',
-        targetUserId: userId, 
-        reason: 'Bypassed document upload via Admin panel.',
-        createdAt: new Date(),
-      });
-
-      return { message: 'User manually verified and audit trail created.' };
+async manualVerify(userId: number, adminId: number) {
+  return await this.dataSource.transaction(async (manager) => {
+    // 1. Find user including soft-deleted ones to check their true status
+    const user = await manager.findOne(UserEntity, { 
+      where: { id: userId },
+      withDeleted: true, // Crucial to see if they are soft-deleted/banned
+      relations: ['identityVerifications'] 
     });
-  }
+    
+    if (!user) throw new NotFoundException('User not found');
+
+    // 2. SAFETY CHECK: Prevent verifying a banned/deleted user
+    if (user.status === UserStatus.BANNED || user.deletedAt) {
+      throw new BadRequestException(
+        'Cannot manually verify a banned user. Please restore the account first if this was an error.'
+      );
+    }
+
+    // 3. Update User Flags & Role
+    user.isIdentityVerified = true;
+    user.isPerformer = true;               
+    user.currentRole = UserRole.PERFORMER; 
+    user.status = UserStatus.ACTIVE;
+    
+    await manager.save(user);
+
+    // 4. Handle Identity Verification Record
+    let verification = await manager.findOne(IdentityVerificationEntity, {
+      where: { user: { id: userId } }
+    });
+
+    if (verification) {
+      verification.status = VerificationStatus.APPROVED;
+      verification.rejection_reason = 'Manually verified by Administrator';
+      verification.reviewed_by = adminId;
+      verification.reviewed_at = new Date();
+      await manager.save(verification);
+    } else {
+      // Create a dummy record if they never uploaded anything but admin wants to verify
+      const newVerify = manager.create(IdentityVerificationEntity, {
+        user: user,
+        status: VerificationStatus.APPROVED,
+        rejection_reason: 'Manually verified by Administrator',
+        reviewed_by: adminId,
+        reviewed_at: new Date(),
+        id_card_url: 'MANUAL_BYPASS',
+        selfie_url: 'MANUAL_BYPASS',
+      });
+      await manager.save(newVerify);
+    }
+
+    // 5. Audit Log for Accountability
+    await manager.save(AuditLogEntity, {
+      adminId,
+      action: 'MANUAL_VERIFICATION',
+      targetUserId: userId, 
+      reason: 'Bypassed document upload via Admin panel.',
+      createdAt: new Date(),
+    });
+
+    return { message: 'User manually verified and audit trail created.' };
+  });
+}
 
   async changeRole(userId: number, newRole: UserRole, adminId: number) {
     if (userId === adminId) throw new BadRequestException('Admins cannot change their own roles.');
