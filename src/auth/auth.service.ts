@@ -215,7 +215,7 @@ export class AuthService {
         email: profile.email,
         fullName: profile.fullName,
         password: randomPassword,
-        // confirmPassword: randomPassword,
+        confirmPassword: randomPassword,
       });
     }
 

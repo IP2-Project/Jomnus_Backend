@@ -135,12 +135,13 @@ export class UsersController {
     return this.usersService.restoreUser(id, adminId);
   }
 
+  // Banned user
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  async softDelete(@Param('id', ParseIntPipe) id: number, @Request() req) {
+  async BanUser(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
     const adminId = this.getAdminId(req);
-    return this.usersService.softRemove(id, adminId);
+    return this.usersService.BanUser(id, adminId);
   }
 
   // --- GENERAL SEARCH ---

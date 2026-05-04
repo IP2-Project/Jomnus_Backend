@@ -328,7 +328,7 @@ async clearVerificationImages(userId: number, adminId: number) {
     // 3. Audit Log
     await manager.save(AuditLogEntity, {
       action: 'IMAGES_CLEARED',
-      reason: 'Admin manually deleted images or user account was deleted.',
+      reason: 'Admin manually deleted images.',
       targetUserId: verification.user.id,
       adminId: adminId,
     });

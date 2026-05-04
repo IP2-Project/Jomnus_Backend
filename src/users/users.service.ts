@@ -302,34 +302,37 @@ async restoreUser(userId: number, adminId: number) {
   }
 
 // Banned Function 
-async softRemove(id: number, adminId: number) {
-  if (id === adminId) throw new BadRequestException('You cannot delete yourself.');
+async BanUser(id: number, adminId: number) {
+  if (id === adminId) throw new BadRequestException('You cannot ban yourself.');
   
   const user = await this.findById(id);
   if (!user) throw new NotFoundException('User not found');
 
   return await this.dataSource.transaction(async (manager) => {
-    // 1. PHYSICAL SYNC: Archive ID files
-    await this.identityService.clearVerificationImages(id, adminId);
-
-    // 2. STATUS SYNC: Set the status enum to BANNED
-    await manager.update(UserEntity, id, { status: UserStatus.BANNED });
-
-    // 3. AUDIT SYNC
-    await manager.save(AuditLogEntity, {
-      adminId,
-      action: 'USER_DELETED',
-      targetUserId: id, 
-      reason: 'User account soft-deleted and identity files archived for privacy.',
-      createdAt: new Date(),
+    // 1. Mark status as BANNED so they can't log in
+    await manager.update(UserEntity, id, { 
+      status: UserStatus.BANNED,
+      refreshToken: null 
     });
 
-    // 4. DATABASE SYNC: Mark as soft-deleted (sets deletedAt)
+    // 2. Audit Log
+    await manager.save(AuditLogEntity, {
+      adminId,
+      action: 'USER_BANNED',
+      targetUserId: id, 
+      reason: 'User account banned via admin panel.',
+    });
+
+    // 3. Soft Delete (Removes them from UI but keeps the ID record in DB)
     return await manager.softDelete(UserEntity, id);
   });
 }
 
   // --- CORE FINDERS ---
+
+  async findOneBy(where: any): Promise<UserEntity | null> {
+    return await this.usersRepository.findOneBy(where);
+  }
 
   async findById(id: number): Promise<any | null> {
     const baseUrl = process.env.APP_URL || 'http://localhost:3001';
