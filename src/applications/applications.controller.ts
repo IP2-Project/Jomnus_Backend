@@ -30,8 +30,19 @@ export class ApplicationsController {
     }
 
     @Get('task/:taskId')
-    findByTask(@Param('taskId') taskId: string) {
-        return this.appService.findByTask(Number(taskId));
+    findByTask(
+        @Param('taskId') taskId: string,
+        @Req() req: RequestWithUser,
+    ) {
+        return this.appService.findByTask(
+            Number(taskId),
+            req.user,
+        );
+    }
+
+    @Get('me')
+    findMine(@Req() req: RequestWithUser) {
+    return this.appService.findMine(req.user.id);
     }
 
     @Patch(':id/reject')

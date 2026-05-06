@@ -29,15 +29,38 @@ export class ApplicationsService {
         });
 
         if (existing) {
-            throw new Error('You already applied');
+            throw new BadRequestException('You already applied');
         }
 
         const task = await this.tasksService.findOne(dto.taskId);
 
-        if (!task) throw new Error('Task not found');
+        if (!task) {
+            throw new NotFoundException('Task not found');
+        }
+
+        if (task.status !== TaskStatus.POSTED) {
+            throw new BadRequestException(
+                'Task is no longer accepting applications'
+            );
+        }
+
+        const acceptedCount = await this.appRepo.count({
+            where: {
+                task_id: task.id,
+                status: ApplicationStatus.ACCEPTED,
+            },
+        });
+
+        if (acceptedCount >= task.required_workers) {
+            throw new BadRequestException(
+                'Task already has enough workers'
+            );
+        }
 
         if (task.requester_id === userId) {
-        throw new Error('Cannot apply to your own task');
+            throw new BadRequestException(
+                'Cannot apply to your own task'
+            );
         }
 
         const app = this.appRepo.create({
@@ -46,13 +69,48 @@ export class ApplicationsService {
             offered_price: dto.offeredPrice,
         });
 
-        return this.appRepo.save(app);
+        const saved = await this.appRepo.save(app);
+
+        return this.appRepo.findOne({
+            where: { id: saved.id },
+            relations: ['performer'],
+        });
     }
 
-    findByTask(taskId: number) {
+    async findMine(userId: number) {
+    return this.appRepo.find({
+        where: {
+        performer_id: userId,
+        },
+
+        relations: [
+        'task',
+        'task.requester',
+        ],
+
+        order: {
+        applied_at: 'DESC',
+        },
+    });
+    }
+
+    async findByTask(taskId: number, user: UserEntity) {
+        const task = await this.tasksService.findOne(taskId);
+
+        if (!task) {
+            throw new NotFoundException();
+        }
+
+        if (task.requester_id !== user.id) {
+            throw new ForbiddenException();
+        }
         return this.appRepo.find({
         where: { task_id: taskId },
-        });
+        relations: ['performer'],
+        order: {
+        applied_at: 'DESC',
+        },
+    });
     }
 
     async rejectApplication(applicationId: number, user: UserEntity) {
@@ -80,32 +138,32 @@ export class ApplicationsService {
         });
 
         return { message: 'Application rejected' };
-        }
+    }
 
-        remove(id: number) {
-            return this.appRepo.delete(id);
+    remove(id: number) {
+        return this.appRepo.delete(id);
     }
 
     async cancelApplication(applicationId: number, user: UserEntity) {
-    const application = await this.appRepo.findOne({
-        where: { id: applicationId },
-    });
+        const application = await this.appRepo.findOne({
+            where: { id: applicationId },
+        });
 
-    if (!application) {
-        throw new NotFoundException('Application not found');
-    }
+        if (!application) {
+            throw new NotFoundException('Application not found');
+        }
 
-    if (application.performer_id !== user.id) {
-        throw new ForbiddenException();
-    }
+        if (application.performer_id !== user.id) {
+            throw new ForbiddenException();
+        }
 
-    if (application.status !== ApplicationStatus.PENDING) {
-        throw new BadRequestException('Cannot cancel this application');
-    }
+        if (application.status !== ApplicationStatus.PENDING) {
+            throw new BadRequestException('Cannot cancel this application');
+        }
 
-    await this.appRepo.update(applicationId, {
-        status: ApplicationStatus.CANCELLED,
-    });
+        await this.appRepo.update(applicationId, {
+            status: ApplicationStatus.CANCELLED,
+        });
 
     return { message: 'Application cancelled' };
     }
@@ -113,6 +171,7 @@ export class ApplicationsService {
     async acceptApplication(applicationId: number, user: UserEntity) {
         const application = await this.appRepo.findOne({
             where: { id: applicationId },
+            relations: ['performer'],
         });
 
         if (!application) throw new NotFoundException('Application not found');
