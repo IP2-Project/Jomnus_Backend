@@ -1,4 +1,3 @@
-
 import {
   Controller,
   Post,
@@ -10,6 +9,7 @@ import {
   UseGuards,
   ParseIntPipe,
   Patch,
+  Req,
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -21,9 +21,9 @@ export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
   @Post()
-  async createReview(@Body() createReviewDto: CreateReviewDto) {
+  async createReview(@Body() dto: CreateReviewDto, @Req() req) {
     try {
-      return await this.reviewsService.createReview(createReviewDto);
+      return await this.reviewsService.createReview(dto, req.user.id);
     } catch (error: any) {
       throw new HttpException(
         error.message || 'Failed to create review',
@@ -32,25 +32,34 @@ export class ReviewsController {
     }
   }
 
-  @Get()
-  async getAllReviews() {
-    return this.reviewsService.getAllReviews();
+  @Get('me')
+  getMyReviews(@Req() req) {
+    return this.reviewsService.getReviewsAboutMe(req.user.id);
   }
 
-  @Get(':revieweeId')
-  async getReviewsByRevieweeId(
-    @Param('revieweeId', ParseIntPipe) revieweeId: number,
-  ) {
-    return this.reviewsService.getReviewsByRevieweeId(revieweeId);
+  @Get('given')
+  getReviewsIGave(@Req() req) {
+    return this.reviewsService.getReviewsIGave(req.user.id);
+  }
+
+  @Get()
+  async getAllReviews(@Req() req) {
+    // you can later add admin check here
+    return this.reviewsService.getAllReviews();
   }
 
   @Patch(':id')
   async updateReview(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateData: Partial<CreateReviewDto>,
+    @Req() req,
   ) {
     try {
-      return await this.reviewsService.updateReview(id, updateData);
+      return await this.reviewsService.updateReview(
+        id,
+        updateData,
+        req.user.id,
+      );
     } catch (error: any) {
       throw new HttpException(
         error.message || 'Failed to update review',
