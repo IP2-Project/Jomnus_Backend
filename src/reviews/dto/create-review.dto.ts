@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsNumber, Max, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  Max,
+  Min,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateReviewDto {
@@ -10,43 +17,39 @@ export class CreateReviewDto {
   @IsNotEmpty()
   @Type(() => Number)
   @IsNumber()
-  reviewer_id!: number;
-
-  @IsNotEmpty()
-  @Type(() => Number)
-  @IsNumber()
-  reviewee_id!: number;
-
-  @IsNotEmpty()
-  @IsNumber()
   @Min(1)
   @Max(5)
   rating!: number;
 
-  @IsNotEmpty()
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(5)
-  reliability!: number;
+  reliability?: number;
 
-  @IsNotEmpty()
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(5)
-  speed!: number;
+  speed?: number;
 
-  @IsNotEmpty()
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(5)
-  communication!: number;
+  communication?: number;
 
-  @IsNotEmpty()
+  @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(5)
-  accuracy!: number;
+  accuracy?: number;
 
-  @IsNotEmpty()
-  comment!: string;
+  @IsOptional()
+  @IsString()
+  comment?: string;
 }
