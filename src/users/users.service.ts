@@ -415,7 +415,7 @@ async BanUser(id: number, adminId: number) {
       await this.usersRepository.save(user);
     }
   }
-
+  
 //USER
   // Add UpdateUserDto to your imports at the top
 // import { UpdateUserDto } from './dto/update-user.dto'; 
