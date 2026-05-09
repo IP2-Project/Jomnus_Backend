@@ -30,7 +30,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // --- PROFILE UPDATES ---
+
+  // --- USER PROFILE UPDATES ---
 
   @UseGuards(JwtAuthGuard)
     @Patch('me') // Matches axios.patch(".../users/me")
@@ -65,9 +66,12 @@ export class UsersController {
       @Request() req,
       @Body() switchRoleDto: SwitchRoleDto
     ) {
-      // NO checkAdmin here! Regular users need access.
-      const userId = this.getAdminId(req); 
-      return this.usersService.switchUserRole(userId, switchRoleDto);
+      const userId = req.user.id;
+
+      return this.usersService.switchUserRole(
+        userId,
+        switchRoleDto,
+      );
     }
 
 

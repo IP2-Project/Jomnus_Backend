@@ -452,9 +452,9 @@ async switchUserRole(userId: number, switchRoleDto: SwitchRoleDto) {
   if (!user) throw new NotFoundException('User not found');
 
   // Business Logic: If switching to PERFORMER, check verification
-  if (switchRoleDto.role === UserRole.PERFORMER && !user.isIdentityVerified) {
-    throw new BadRequestException('You must complete identity verification to enter Performer mode.');
-  }
+  // if (switchRoleDto.role === UserRole.PERFORMER && !user.isIdentityVerified) {
+  //   throw new BadRequestException('You must complete identity verification to enter Performer mode.');
+  // }
 
   user.currentRole = switchRoleDto.role;
   user.isPerformer = (switchRoleDto.role === UserRole.PERFORMER);
