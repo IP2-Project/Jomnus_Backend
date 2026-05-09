@@ -415,5 +415,8 @@ async BanUser(id: number, adminId: number) {
     }
   }
 
-  
+  async update(id: number, data: Partial<UserEntity>): Promise<UserEntity> {
+    await this.usersRepository.update(id, data);
+    return this.usersRepository.findOneOrFail({ where: { id } });
+  }
 }
