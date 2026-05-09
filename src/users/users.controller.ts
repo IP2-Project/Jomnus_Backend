@@ -12,7 +12,8 @@ import {
   ForbiddenException, 
   ParseIntPipe,
   UseInterceptors,
-  ClassSerializerInterceptor
+  ClassSerializerInterceptor,
+  UploadedFile
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UserRole } from './entity/user.entity';
@@ -21,11 +22,55 @@ import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { ChangeRoleDto } from './dto/change-role.dto';
+import { SwitchRoleDto, UpdateProfileDto } from './dto/update-profile.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
 @UseInterceptors(ClassSerializerInterceptor) 
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // --- PROFILE UPDATES ---
+
+  @UseGuards(JwtAuthGuard)
+    @Patch('me') // Matches axios.patch(".../users/me")
+    async updateMe(
+      @Request() req, 
+      @Body() updateUserDto: any // Use your UpdateUserDto here
+    ) {
+      const userId = this.getAdminId(req); // Gets ID from JWT token
+      return this.usersService.updateMe(userId, updateUserDto);
+    }
+
+  
+  @UseGuards(JwtAuthGuard)
+    @Post('upload-avatar')
+    @UseInterceptors(FileInterceptor('file')) // You'll need to install @nestjs/platform-express
+    async uploadAvatar(@UploadedFile() file: Express.Multer.File) {
+      // Logic to upload to S3/Cloudinary and return the URL
+      // return { url: 'https://stored-image-url.com/image.jpg' };
+    }
+
+
+  @UseGuards(JwtAuthGuard)
+    @Get('me') // Matches axios.get(".../users/me")
+    async getMe(@Request() req) {
+      const userId = this.getAdminId(req);
+      return this.usersService.findById(userId);
+    }
+
+  @UseGuards(JwtAuthGuard)
+    @Patch('me/switch-role')
+    async switchRole(
+      @Request() req,
+      @Body() switchRoleDto: SwitchRoleDto
+    ) {
+      // NO checkAdmin here! Regular users need access.
+      const userId = this.getAdminId(req); 
+      return this.usersService.switchUserRole(userId, switchRoleDto);
+    }
+
+
 
   // --- DASHBOARD & STATS ---
 
