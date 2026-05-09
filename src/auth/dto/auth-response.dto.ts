@@ -14,5 +14,6 @@ export class AuthResponseDto {
     email: string;
     fullName: string;
     role: UserRole;
+    profileImage?: string;
   };
 }

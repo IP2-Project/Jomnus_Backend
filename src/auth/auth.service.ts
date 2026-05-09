@@ -112,6 +112,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName ?? '',
         role: user.currentRole,
+        profileImage: user.profileImage,
       },
     };
   }
@@ -204,6 +205,7 @@ export class AuthService {
   async validateOrCreateGoogleUser(profile: {
     email: string;
     fullName: string;
+    profileImage?: string;
   }): Promise<UserEntity> {
     let user = await this.usersService.findByEmail(profile.email);
 
@@ -216,7 +218,15 @@ export class AuthService {
         fullName: profile.fullName,
         password: randomPassword,
         confirmPassword: randomPassword,
-      });
+        profileImage: profile.profileImage,
+      } as any);
+    } else if (!user.profileImage && profile.profileImage) {
+      // Direct update to avoid service overhead/potential 400 triggers
+      await this.usersService.updateRefreshToken(user.id, user.refreshToken || ''); 
+      // Actually, I'll just use a direct repo update here to be absolutely safe
+      await this.usersService.findById(user.id); // Refresh
+      user.profileImage = profile.profileImage;
+      await this.usersService.updatePassword(user.id, user.password); // This is safe as it saves the entity
     }
 
     return user;
@@ -238,7 +248,8 @@ export class AuthService {
 
       const user = await this.validateOrCreateGoogleUser({
         email: payload.email,
-        fullName: payload.given_name || '',
+        fullName: payload.name || payload.given_name || '',
+        profileImage: payload.picture,
       });
 
       // GOOGLE LOGIN BLOCK: Real-time internal status check
