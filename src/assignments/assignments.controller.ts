@@ -31,6 +31,14 @@ export class AssignmentsController {
     return this.assignService.completeAssignment(Number(id), req.user);
   }
 
+  @Patch(':id/start')
+  start(
+    @Param('id') id: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.assignService.startAssignment(Number(id), req.user);
+  }
+
   @Patch(':id/verify')
   verify(
     @Param('id') id: string,

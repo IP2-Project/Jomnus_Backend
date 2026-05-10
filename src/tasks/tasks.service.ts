@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -41,11 +42,14 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto, userId: number) {
+    this.validateTaskDates(dto.startDate, dto.deadline);
+
     const task = await this.taskRepo.save({
       title: dto.title,
       description: dto.description,
       requester_id: userId,
       price: dto.price,
+      start_date: dto.startDate ? new Date(dto.startDate) : undefined,
       deadline: new Date(dto.deadline),
       required_workers: dto.requiredWorkers ?? 1,
       location_text: dto.locationText,
@@ -115,11 +119,24 @@ export class TasksService {
       throw new ForbiddenException();
     }
 
+    this.validateTaskDates(
+      dto.startDate,
+      dto.deadline,
+      task.start_date,
+      task.deadline,
+    );
+
     await this.taskRepo.update(id, {
-      ...dto,
+      title: dto.title,
+      description: dto.description,
+      price: dto.price,
+      status: dto.status,
+      start_date: dto.startDate ? new Date(dto.startDate) : undefined,
       deadline: dto.deadline ? new Date(dto.deadline) : undefined,
       location_text: dto.locationText,
       required_workers: dto.requiredWorkers,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
     });
 
     return this.findOne(id);
@@ -133,5 +150,36 @@ export class TasksService {
     }
 
     return this.taskRepo.remove(task);
+  }
+
+  private validateTaskDates(
+    startDate?: string,
+    deadline?: string,
+    existingStartDate?: Date,
+    existingDeadline?: Date,
+  ) {
+    const now = new Date();
+    const start = startDate
+      ? new Date(startDate)
+      : existingStartDate
+        ? new Date(existingStartDate)
+        : undefined;
+    const end = deadline
+      ? new Date(deadline)
+      : existingDeadline
+        ? new Date(existingDeadline)
+        : undefined;
+
+    if (startDate && start && start.getTime() < now.getTime()) {
+      throw new BadRequestException('Start time cannot be in the past');
+    }
+
+    if (deadline && end && end.getTime() <= now.getTime()) {
+      throw new BadRequestException('Deadline must be in the future');
+    }
+
+    if (start && end && end.getTime() <= start.getTime()) {
+      throw new BadRequestException('Deadline must be after the start time');
+    }
   }
 }
