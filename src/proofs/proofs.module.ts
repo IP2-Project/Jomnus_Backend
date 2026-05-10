@@ -4,9 +4,10 @@ import { ProofsController } from './proofs.controller';
 import { ProofsService } from './proofs.service';
 import { Proof } from './entities/task-proof.entity';
 import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
+import { TaskEntity } from '@/tasks/entities/task.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Proof, TaskAssignmentEntity])],
+  imports: [TypeOrmModule.forFeature([Proof, TaskAssignmentEntity, TaskEntity])],
   controllers: [ProofsController],
   providers: [ProofsService],
 })

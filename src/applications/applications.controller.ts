@@ -45,6 +45,14 @@ export class ApplicationsController {
     return this.appService.findMine(req.user.id);
     }
 
+    @Patch('task/:taskId/reject-pending')
+    rejectPendingByTask(
+    @Param('taskId') taskId: string,
+    @Req() req: RequestWithUser,
+    ) {
+    return this.appService.rejectPendingByTask(Number(taskId), req.user);
+    }
+
     @Patch(':id/reject')
     reject(
     @Param('id') id: string,
