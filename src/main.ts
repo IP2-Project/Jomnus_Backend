@@ -1,9 +1,9 @@
-import { NestFactory, Reflector } from '@nestjs/core'; // Add Reflector
-import { AppModule } from './app.module';
+import { NestFactory, Reflector } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
-import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common'; // Add ClassSerializerInterceptor
+import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -17,8 +17,6 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
-
-  // Serve static files from the project root's uploads folder
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });
@@ -30,10 +28,8 @@ async function bootstrap() {
     }),
   );
 
-  // --- ADD THIS LINE TO FIX THE PASSWORD EXCLUSION ---
+  
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
-  // --------------------------------------------------
-
   app.use(cookieParser());
   
   const port = process.env.PORT ?? 3001;

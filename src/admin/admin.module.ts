@@ -7,6 +7,7 @@ import { IdentityVerificationEntity } from '@/identity-verifications/entities/id
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { adminServices } from './admin.service';
 import { adminController } from './admin.controller';
+import { IdentityVerificationsModule } from '@/identity-verifications/identity-verifications.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { adminController } from './admin.controller';
       IdentityVerificationEntity,
       TaskEntity,
     ]),
+    IdentityVerificationsModule,
   ],
   controllers: [adminController],
   providers: [adminServices],

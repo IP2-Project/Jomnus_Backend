@@ -8,6 +8,7 @@ import {
   Patch,
   ParseIntPipe,
   BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { adminServices } from './admin.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
@@ -117,8 +118,9 @@ export class adminController {
   }
 
   @Patch('verifications/:id/approve')
-  async approveVerification(@Param('id', ParseIntPipe) id: number) {
-    return await this.adminServices.verifyIdentity(id);
+  async approveVerification(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    const adminId = req.user?.id || req.user?.sub;
+    return await this.adminServices.verifyIdentity(id, adminId);
   }
 
   // ============ DASHBOARD STATS ============
@@ -146,6 +148,7 @@ export class adminController {
       approvedVerifications: verifications.data.filter(
         (v: any) => v.status === 'APPROVED',
       ).length,
+      fullTasks: tasks.filter((t: any) => t.isFull).length,
     };
   }
 }

@@ -61,6 +61,17 @@ export class IdentityVerificationsController {
     return this.service.getOne(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async findMine(@Request() req) {
+    const userId = this.getUserId(req);
+    const result = await this.service.getOneByUser(userId);
+    if (!result) {
+      return { status: 'NOT_SUBMITTED' };
+    }
+    return result;
+  }
+
   // --- USER SUBMISSION ---
   @UseGuards(JwtAuthGuard)
   @Post()

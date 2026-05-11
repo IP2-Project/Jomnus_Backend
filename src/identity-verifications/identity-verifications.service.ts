@@ -462,4 +462,21 @@ private async deletePhysicalFiles(filePaths: (string | null)[]) {
       selfie_url: verification.selfie_url ? `${baseUrl}/${verification.selfie_url}` : null,
     };
   }
+
+  async getOneByUser(userId: number) {
+    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+    const verification = await this.verificationRepo.findOne({
+      where: { user: { id: userId } },
+      relations: ['user', 'reviewer'],
+      order: { created_at: 'DESC' },
+    });
+
+    if (!verification) return null;
+
+    return {
+      ...verification,
+      id_card_url: verification.id_card_url && verification.id_card_url !== 'MANUAL_BYPASS' ? `${baseUrl}/${verification.id_card_url}` : verification.id_card_url,
+      selfie_url: verification.selfie_url && verification.selfie_url !== 'MANUAL_BYPASS' ? `${baseUrl}/${verification.selfie_url}` : verification.selfie_url,
+    };
+  }
 }

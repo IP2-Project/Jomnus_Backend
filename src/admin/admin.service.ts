@@ -4,7 +4,10 @@ import {
   TaskAssignmentEntity,
   AssignmentStatus,
 } from '@/assignments/entities/assignment.entity';
-import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
+import {
+  TaskApplicationEntity,
+  ApplicationStatus,
+} from '@/applications/entities/task-application.entity';
 import {
   IdentityVerificationEntity,
   VerificationStatus,
@@ -12,6 +15,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { Repository } from 'typeorm';
+import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 
 @Injectable()
 export class adminServices {
@@ -26,6 +30,7 @@ export class adminServices {
     private readonly verificationStatusRepository: Repository<IdentityVerificationEntity>,
     @InjectRepository(TaskEntity)
     private readonly taskRepository: Repository<TaskEntity>,
+    private readonly identityVerificationsService: IdentityVerificationsService,
   ) {}
 
   async deleteUser(id: number) {
@@ -36,7 +41,19 @@ export class adminServices {
   }
 
   async getAllTasks() {
-    return await this.taskRepository.find();
+    const tasks = await this.taskRepository.find({ relations: ['requester'] });
+    
+    // Enrich tasks with worker capacity info
+    return Promise.all(tasks.map(async (task) => {
+      const acceptedCount = await this.applicationRepository.count({
+        where: { task_id: task.id, status: ApplicationStatus.ACCEPTED }
+      });
+      return {
+        ...task,
+        acceptedWorkers: acceptedCount,
+        isFull: acceptedCount >= task.required_workers
+      };
+    }));
   }
 
   async deleteTask(id: number) {
@@ -44,7 +61,22 @@ export class adminServices {
   }
 
   async findTaskById(id: number, title: string) {
-    return await this.taskRepository.findOne({ where: { id, title } });
+    const task = await this.taskRepository.findOne({ 
+      where: { id }, // Removed title from where to make it more flexible
+      relations: ['requester'] 
+    });
+    
+    if (!task) return null;
+
+    const acceptedCount = await this.applicationRepository.count({
+      where: { task_id: task.id, status: ApplicationStatus.ACCEPTED }
+    });
+
+    return {
+      ...task,
+      acceptedWorkers: acceptedCount,
+      isFull: acceptedCount >= task.required_workers
+    };
   }
 
   async getAllTaskApplications(id: number) {
@@ -69,18 +101,10 @@ export class adminServices {
     });
   }
 
-  async verifyIdentity(id: number) {
-    const verification = await this.verificationStatusRepository.findOne({
-      where: { id },
-      relations: ['user'],
+  async verifyIdentity(id: number, adminId: number) {
+    return await this.identityVerificationsService.review(id, adminId, {
+      status: VerificationStatus.APPROVED,
     });
-    if (verification) {
-      verification.status = VerificationStatus.APPROVED;
-      await this.verificationStatusRepository.save(verification);
-      const user = verification.user;
-      user.isIdentityVerified = true;
-      await this.UserRepository.save(user);
-    }
   }
 
   async paginateUsers(page: number, limit: number) {
