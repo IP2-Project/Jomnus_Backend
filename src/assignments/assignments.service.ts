@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
-import { TaskEntity } from '@/tasks/entities/task.entity';
+import { TaskEntity, TaskStatus } from '@/tasks/entities/task.entity';
 
 @Injectable()
 export class AssignmentsService {
@@ -21,6 +21,7 @@ export class AssignmentsService {
         performer_id: performerId,
         application_id: applicationId,
         accepted_price: price,  
+        status: AssignmentStatus.ASSIGNED,
         });
 
         return this.assignRepo.save(assignment);
@@ -29,7 +30,36 @@ export class AssignmentsService {
     findByTask(taskId: number) {
         return this.assignRepo.find({
         where: { task_id: taskId },
+        relations: ['performer', 'application'],
         });
+    }
+
+    async startAssignment(id: number, user: UserEntity) {
+        const assignment = await this.assignRepo.findOne({
+            where: { id },
+        });
+
+        if (!assignment) {
+            throw new NotFoundException('Assignment not found');
+        }
+
+        if (assignment.performer_id !== user.id) {
+            throw new ForbiddenException();
+        }
+
+        if (assignment.status !== AssignmentStatus.ASSIGNED) {
+            throw new BadRequestException('Assignment has already started');
+        }
+
+        await this.assignRepo.update(id, {
+            status: AssignmentStatus.IN_PROGRESS,
+        });
+
+        await this.taskRepo.update(assignment.task_id, {
+            status: TaskStatus.IN_PROGRESS,
+        });
+
+        return { message: 'Marked as in progress' };
     }
 
 

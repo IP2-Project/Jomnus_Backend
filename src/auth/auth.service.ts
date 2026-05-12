@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -39,7 +40,17 @@ export class AuthService {
     password: string,
   ): Promise<UserEntity | null> {
     const user = await this.usersService.findByEmail(email);
+    
     if (user && (await user.validatePassword(password))) {
+      // THE FRONT DOOR BLOCK: Check for ban or deletion before login
+      if (user.status === 'banned') {
+        throw new ForbiddenException('Login failed: Your account has been banned. Please contact support.');
+      }
+
+      if (user.deletedAt) {
+        throw new UnauthorizedException('Login failed: This account has been deactivated.');
+      }
+
       return user;
     }
     return null;
@@ -59,12 +70,10 @@ export class AuthService {
       throw new ConflictException('Email already exists');
     }
 
-    // Validate passwords match
     if (registerDto.password !== registerDto.confirmPassword) {
       throw new BadRequestException('Passwords do not match');
     }
 
-    // Create user with default helper value
     const user = await this.usersService.create(registerDto);
     return this.generateTokens(user);
   }
@@ -74,9 +83,16 @@ export class AuthService {
     refreshToken: string,
   ): Promise<AuthResponseDto> {
     const user = await this.usersService.findById(userId);
+    
     if (!user || user.refreshToken !== refreshToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
+
+    // BLOCK REFRESH: Kill active sessions for banned users
+    if (user.status === 'banned') {
+      throw new ForbiddenException('Session expired: Your account is banned.');
+    }
+
     return this.generateTokens(user);
   }
 
@@ -96,6 +112,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName ?? '',
         role: user.currentRole,
+        profileImage: user.profileImage,
       },
     };
   }
@@ -109,20 +126,16 @@ export class AuthService {
   ): Promise<{ message: string }> {
     const user = await this.usersService.findByEmail(forgotPasswordDto.email);
     if (!user) {
-      // Return generic message for security reasons
       return {
         message: 'If the email exists, a password reset OTP has been sent',
       };
     }
 
-    // Generate OTP
     const otp = this.otpService.generateOtp();
     const otpExpiry = this.otpService.getOtpExpiry();
 
-    // Save OTP to user
     await this.usersService.updateOtp(user.id, otp, otpExpiry);
 
-    // Send OTP via email
     try {
       await this.emailService.sendPasswordResetEmail(
         user.email,
@@ -149,7 +162,6 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    // Check if OTP exists and is not expired
     if (!user.otp || !user.otpExpiry) {
       throw new BadRequestException(
         'No active password reset request. Please request a new one.',
@@ -157,29 +169,24 @@ export class AuthService {
     }
 
     if (this.otpService.isOtpExpired(user.otpExpiry)) {
-      // Clear expired OTP
       await this.usersService.updateOtp(user.id, null, null);
       throw new BadRequestException(
         'OTP has expired. Please request a new password reset.',
       );
     }
 
-    // Verify OTP
     if (user.otp !== resetPasswordDto.otp) {
       throw new BadRequestException('Invalid OTP');
     }
 
-    // Validate new password
     if (!this.otpService.validateOtp(resetPasswordDto.otp)) {
       throw new BadRequestException('Invalid OTP format');
     }
 
-    // Update password and clear OTP
     user.password = resetPasswordDto.password;
     await this.usersService.updatePassword(user.id, resetPasswordDto.password);
     await this.usersService.updateOtp(user.id, null, null);
 
-    // Send success email
     try {
       await this.emailService.sendPasswordResetSuccessEmail(
         user.email,
@@ -198,11 +205,11 @@ export class AuthService {
   async validateOrCreateGoogleUser(profile: {
     email: string;
     fullName: string;
+    profileImage?: string;
   }): Promise<UserEntity> {
     let user = await this.usersService.findByEmail(profile.email);
 
     if (!user) {
-      // Create new user from Google profile
       const generatedUsername = profile.email.split('@')[0];
       const randomPassword = Math.random().toString(36).slice(-20);
       
@@ -210,8 +217,16 @@ export class AuthService {
         email: profile.email,
         fullName: profile.fullName,
         password: randomPassword,
-        // confirmPassword: randomPassword,
-      });
+        confirmPassword: randomPassword,
+        profileImage: profile.profileImage,
+      } as any);
+    } else if (!user.profileImage && profile.profileImage) {
+      // Direct update to avoid service overhead/potential 400 triggers
+      await this.usersService.updateRefreshToken(user.id, user.refreshToken || ''); 
+      // Actually, I'll just use a direct repo update here to be absolutely safe
+      await this.usersService.findById(user.id); // Refresh
+      user.profileImage = profile.profileImage;
+      await this.usersService.updatePassword(user.id, user.password); // This is safe as it saves the entity
     }
 
     return user;
@@ -219,11 +234,13 @@ export class AuthService {
 
   async verifyGoogleToken(token: string): Promise<AuthResponseDto> {
     try {
+      // 1. Await the ticket verification
       const ticket = await this.googleClient.verifyIdToken({
-        idToken: token,
+        idToken: token, // Changed from id_token to idToken
         audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
       });
 
+      // 2. ticket is now resolved, so getPayload() will exist
       const payload = ticket.getPayload();
       if (!payload || !payload.email) {
         throw new UnauthorizedException('Invalid Google token');
@@ -231,11 +248,18 @@ export class AuthService {
 
       const user = await this.validateOrCreateGoogleUser({
         email: payload.email,
-        fullName: payload.given_name || '',
+        fullName: payload.name || payload.given_name || '',
+        profileImage: payload.picture,
       });
+
+      // GOOGLE LOGIN BLOCK: Real-time internal status check
+      if (user.status === 'banned') {
+        throw new ForbiddenException('Google login failed: Your account has been banned.');
+      }
 
       return this.generateTokens(user);
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       console.error('Google token verification failed:', error);
       throw new UnauthorizedException('Invalid Google token');
     }

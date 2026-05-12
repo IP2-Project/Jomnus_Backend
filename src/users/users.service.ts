@@ -1,83 +1,465 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { 
+  Injectable, 
+  NotFoundException, 
+  BadRequestException, 
+  ForbiddenException, 
+  Inject, 
+  forwardRef 
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { UserEntity, UserRole } from './entity/user.entity';
-import { UpdateProfileDto } from './dto/update-profile.dto';
-// Ensure you import your RegisterDto or CreateUserDto here
+import { Repository, DataSource } from 'typeorm';
+import { UserEntity, UserRole, UserStatus } from '@/users/entity/user.entity';
+import { RegisterAuthDto } from '@/auth/dto/register-auth.dto';
+import { StatsService } from '@/stats/stats.service';
+import { IdentityVerificationEntity, VerificationStatus } from '@/identity-verifications/entities/identity-verification.entity';
+import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.entity';
+import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
+import { plainToInstance } from 'class-transformer';
+import { SwitchRoleDto } from './dto/switch-role.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
+    private usersRepository: Repository<UserEntity>,
     
+    @InjectRepository(IdentityVerificationEntity)
+    private verificationRepository: Repository<IdentityVerificationEntity>,
+
+    @InjectRepository(AuditLogEntity)
+    private auditLogRepository: Repository<AuditLogEntity>,
+
+    private statsService: StatsService,
+
+    private dataSource: DataSource,
+
+    @Inject(forwardRef(() => IdentityVerificationsService))
+    private readonly identityService: IdentityVerificationsService,
   ) {}
 
-  // Added findById to satisfy auth.service and jwt.strategy
-  async findById(id: number | string): Promise<UserEntity> {
-    const user = await this.userRepository.findOne({
-      where: { id: Number(id) },
-      relations: ['performerStats', 'requesterStats'],
+  // --- DASHBOARD LOGIC ---
+
+async getPaginatedUsers(query: {
+  page: number;
+  limit: number;
+  role?: string;
+  verified?: string;
+  status?: string;
+  search?: string;
+  pendingOnly?: string;
+}) {
+  const { page = 1, limit = 10, role, status, search, pendingOnly, verified } = query;
+  const skip = (page - 1) * limit;
+
+  // Initialize query builder
+  const queryBuilder = this.usersRepository.createQueryBuilder('user');
+
+  // 1. STATUS FILTER (Matches Figma Tabs)
+  if (status === 'BANNED') {
+    // We must include soft-deleted records to see 'Banned' users
+    queryBuilder
+      .withDeleted() 
+      .where('user.deletedAt IS NOT NULL');
+  } else {
+    // Default to ACTIVE: TypeORM handles 'deletedAt IS NULL' automatically 
+    // unless withDeleted() is called.
+    queryBuilder.where('user.deletedAt IS NULL');
+  }
+
+  // 2. PENDING FILTER
+  if (pendingOnly === 'true') {
+    queryBuilder
+      .innerJoin('user.identityVerifications', 'verification')
+      .andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
+  }
+
+  // 3. ROLE FILTER (e.g., ADMIN, PERFORMER, REQUESTER)
+  if (role && role !== 'ALL') {
+    queryBuilder.andWhere('user.currentRole = :role', { role });
+  }
+
+  // 4. VERIFIED FILTER (Missing in your snippet, but in Figma)
+  if (verified === 'true') {
+    queryBuilder.andWhere('(user.isVerified = true OR user.isIdentityVerified = true)');
+  }
+
+  // 5. SEARCH FILTER
+  if (search) {
+    queryBuilder.andWhere(
+      '(user.fullName ILIKE :search OR user.email ILIKE :search)',
+      { search: `%${search}%` }
+    );
+  }
+
+  const [users, total] = await queryBuilder
+    .orderBy('user.id', 'DESC')
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+
+  // 6. DATA MAPPING (Matches Figma Labels)
+    const data = users.map(user => {
+      let vLabel = 'No';
+      if (user.currentRole === UserRole.ADMIN) {
+        vLabel = 'Internal';
+      } else if (user.isVerified || user.isIdentityVerified) {
+        vLabel = 'Yes';
+      }
+
+    return {
+        ...user,
+        verificationStatus: vLabel,
+        displayStatus: user.deletedAt ? 'Banned' : 'Active'
+      };
+  });
+
+  return {
+    data,
+    meta: {
+      totalItems: total,
+      itemCount: data.length,
+      itemsPerPage: Number(limit),
+      totalPages: Math.ceil(total / limit),
+      currentPage: Number(page),
+    },
+  };
+}
+  
+  async getAdminSummaryStats() {
+    const pendingVerifications = await this.verificationRepository.count({
+      where: { status: VerificationStatus.PENDING },
     });
+    const totalUsers = await this.usersRepository.count();
+    return { pendingVerifications, totalUsers };
+  }
+
+  // --- IDENTITY WORKFLOW BRIDGES ---
+
+  async reviewVerification(id: number, status: VerificationStatus, adminId: number, reason?: string) {
+    return this.identityService.review(id, adminId, { status, rejection_reason: reason });
+  }
+
+  async getPendingVerifications(page: number, limit: number = 10) {
+    return this.identityService.getPaginatedList(page, limit, '', 'PENDING');
+  }
+
+  async getUserAuditLogs(userId: number) {
+    return this.auditLogRepository.find({
+      where: { targetUserId: userId },
+      relations: ['admin'],
+      order: { createdAt: 'DESC' },
+      take: 20
+    });
+  }
+
+  // --- ADMIN ACTIONS ---
+
+async manualVerify(userId: number, adminId: number) {
+  return await this.dataSource.transaction(async (manager) => {
+    // 1. Find user including soft-deleted ones to check their true status
+    const user = await manager.findOne(UserEntity, { 
+      where: { id: userId },
+      withDeleted: true, // Crucial to see if they are soft-deleted/banned
+      relations: ['identityVerifications'] 
+    });
+    
     if (!user) throw new NotFoundException('User not found');
 
-    // 🔥 CREATE STATS HERE
-    // await this.StatsService.createDefaultStats(user.id);
+    // 2. SAFETY CHECK: Prevent verifying a banned/deleted user
+    if (user.status === UserStatus.BANNED || user.deletedAt) {
+      throw new BadRequestException(
+        'Cannot manually verify a banned user. Please restore the account first if this was an error.'
+      );
+    }
+
+    // 3. Update User Flags & Role
+    user.isIdentityVerified = true;
+    user.isPerformer = true;               
+    user.currentRole = UserRole.PERFORMER; 
+    user.status = UserStatus.ACTIVE;
+    
+    await manager.save(user);
+
+    // 4. Handle Identity Verification Record
+    let verification = await manager.findOne(IdentityVerificationEntity, {
+      where: { user: { id: userId } }
+    });
+
+    if (verification) {
+      verification.status = VerificationStatus.APPROVED;
+      verification.rejection_reason = 'Manually verified by Administrator';
+      verification.reviewed_by = adminId;
+      verification.reviewed_at = new Date();
+      await manager.save(verification);
+    } else {
+      // Create a dummy record if they never uploaded anything but admin wants to verify
+      const newVerify = manager.create(IdentityVerificationEntity, {
+        user: user,
+        status: VerificationStatus.APPROVED,
+        rejection_reason: 'Manually verified by Administrator',
+        reviewed_by: adminId,
+        reviewed_at: new Date(),
+        id_card_url: 'MANUAL_BYPASS',
+        selfie_url: 'MANUAL_BYPASS',
+      });
+      await manager.save(newVerify);
+    }
+
+    // 5. Audit Log for Accountability
+    await manager.save(AuditLogEntity, {
+      adminId,
+      action: 'MANUAL_VERIFICATION',
+      targetUserId: userId, 
+      reason: 'Bypassed document upload via Admin panel.',
+      createdAt: new Date(),
+    });
+
+    return { message: 'User manually verified and audit trail created.' };
+  });
+}
+
+  async changeRole(userId: number, newRole: UserRole, adminId: number) {
+    if (userId === adminId) throw new BadRequestException('Admins cannot change their own roles.');
+
+    const targetUser = await this.findById(userId);
+    if (!targetUser) throw new NotFoundException('User not found');
+
+    const oldRole = targetUser.currentRole;
+    targetUser.currentRole = newRole;
+    targetUser.isPerformer = (newRole === UserRole.PERFORMER);
+
+    const savedUser = await this.usersRepository.save(targetUser);
+
+    if (newRole === UserRole.PERFORMER) {
+      await this.statsService.createInitialStats(savedUser);
+    }
+
+    await this.auditLogRepository.save({
+      adminId,
+      action: 'ROLE_CHANGE',
+      targetUserId: userId,
+      reason: `Role changed from ${oldRole} to ${newRole}`,
+      createdAt: new Date(),
+    });
+
+    return savedUser;
+  }
+
+  async toggleVerifiedBadge(id: number, isVerified: boolean, adminId: number) {
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+
+    user.isVerified = isVerified;
+    const savedUser = await this.usersRepository.save(user);
+
+    await this.auditLogRepository.save({
+      adminId,
+      action: 'VERIFIED_BADGE_TOGGLE',
+      targetUserId: id,
+      reason: `Manual verification badge set to ${isVerified}`,
+      createdAt: new Date(),
+    });
+
+    return savedUser;
+  }
+
+async restoreUser(userId: number, adminId: number) {
+  const user = await this.usersRepository.findOne({
+    where: { id: userId },
+    withDeleted: true, 
+  });
+
+  if (!user) throw new NotFoundException(`User with ID ${userId} not found.`);
+
+  // 1. DATABASE SYNC: Clear deletedAt
+  await this.usersRepository.restore(userId);
+
+  // 2. STATUS SYNC: Reset enum to active
+  await this.usersRepository.update(userId, { status: UserStatus.ACTIVE });
+
+  // 3. AUDIT SYNC
+  await this.auditLogRepository.save({
+    adminId,
+    action: 'USER_RESTORED',
+    targetUserId: userId,
+    reason: 'Account restored by Administrator',
+    createdAt: new Date(),
+  });
+
+  return { message: 'User account successfully restored.', userId };
+}
+
+  async toggleStatus(id: number, status: UserStatus, adminId?: number) {
+    if (adminId && id === adminId && status === UserStatus.BANNED) {
+      throw new BadRequestException('You cannot ban your own account!');
+    }
+
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    
+    user.status = status;
+    if (status === UserStatus.BANNED) user.refreshToken = null;
+
+    const savedUser = await this.usersRepository.save(user);
+
+    if (adminId) {
+      await this.auditLogRepository.save({
+        adminId,
+        action: status === UserStatus.BANNED ? 'USER_BANNED' : 'USER_ACTIVATED',
+        targetUserId: id, 
+        reason: `User status set to ${status} by Admin.`,
+        createdAt: new Date(),
+      });
+    }
+
+    return savedUser;
+  }
+
+// Banned Function 
+async BanUser(id: number, adminId: number) {
+  if (id === adminId) throw new BadRequestException('You cannot ban yourself.');
+  
+  const user = await this.findById(id);
+  if (!user) throw new NotFoundException('User not found');
+
+  return await this.dataSource.transaction(async (manager) => {
+    // 1. Mark status as BANNED so they can't log in
+    await manager.update(UserEntity, id, { 
+      status: UserStatus.BANNED,
+      refreshToken: null 
+    });
+
+    // 2. Audit Log
+    await manager.save(AuditLogEntity, {
+      adminId,
+      action: 'USER_BANNED',
+      targetUserId: id, 
+      reason: 'User account banned via admin panel.',
+    });
+
+    // 3. Soft Delete (Removes them from UI but keeps the ID record in DB)
+    return await manager.softDelete(UserEntity, id);
+  });
+}
+
+  // --- CORE FINDERS ---
+
+  async findOneBy(where: any): Promise<UserEntity | null> {
+    return await this.usersRepository.findOneBy(where);
+  }
+
+  async findById(id: number): Promise<any | null> {
+    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+    
+    const user = await this.usersRepository.createQueryBuilder('user')
+      .leftJoinAndSelect('user.identityVerifications', 'verification')
+      .where('user.id = :id', { id })
+      .orderBy('verification.id', 'DESC')
+      .getOne();
+
+    if (!user) return null;
+
+    if (user.identityVerifications) {
+      user.identityVerifications = user.identityVerifications.map(v => ({
+        ...v,
+        id_card_url: v.id_card_url && v.id_card_url !== 'MANUAL_BYPASS' ? `${baseUrl}/${v.id_card_url}` : v.id_card_url,
+        selfie_url: v.selfie_url && v.selfie_url !== 'MANUAL_BYPASS' ? `${baseUrl}/${v.selfie_url}` : v.selfie_url,
+      }));
+    }
 
     return user;
   }
 
-  // Added findByEmail to satisfy auth.service
+  async findAll(): Promise<UserEntity[]> {
+    return this.usersRepository.find();
+  }
+
   async findByEmail(email: string): Promise<UserEntity | null> {
-    return await this.userRepository.findOne({ where: { email } });
+    return this.usersRepository.findOne({ where: { email } });
   }
 
-  // Added create to satisfy auth.service registration and Google login
-  async create(userData: Partial<UserEntity>): Promise<UserEntity> {
-    const newUser = this.userRepository.create(userData);
-    return await this.userRepository.save(newUser);
-  }
+  // --- AUTH & MAINTENANCE ---
 
-  // Added updateRefreshToken for login/logout flow
-  async updateRefreshToken(id: number | string, refreshToken: string): Promise<void> {
-    await this.userRepository.update(id, { refreshToken });
-  }
+  async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
+    const isInternal = registerDto.email.includes('@jomnus.admin');
+    const role = isInternal ? UserRole.ADMIN : UserRole.REQUESTER;
 
-  // Added updateOtp for forgot password flow
-  async updateOtp(id: number | string, otp: string | null, otpExpiry: Date | null): Promise<void> {
-    await this.userRepository.update(id, { otp, otpExpiry });
-  }
+    const user = this.usersRepository.create({
+      ...registerDto,
+      currentRole: role,
+      isIdentityVerified: isInternal,
+      isPerformer: false,
+      status: UserStatus.ACTIVE
+    });
 
-  // Added updatePassword for reset password flow
-  async updatePassword(id: number | string, password: string): Promise<void> {
-    // In a real app, ensure the password is hashed before it reaches here 
-    // or use a BeforeUpdate hook in the entity
-    await this.userRepository.update(id, { password });
-  }
-
-  async findOne(id: string): Promise<UserEntity> {
-    return this.findById(id);
-  }
-
-  async updateMe(id: string, dto: UpdateProfileDto): Promise<UserEntity> {
-    await this.userRepository.update(id, dto);
-    return this.findById(id);
-  }
-
-  async switchRole(id: string, newRole: UserRole): Promise<UserEntity> {
-    if (newRole === UserRole.ADMIN) {
-      throw new ForbiddenException('Admin role cannot be assigned manually');
+    const savedUser = await this.usersRepository.save(user);
+    
+    if (this.statsService) {
+      await this.statsService.createInitialStats(savedUser);
     }
-
-    const user = await this.findById(id);
-
-    if (newRole === UserRole.PERFORMER && !user.isPerformer) {
-      throw new ForbiddenException('You have not been approved as a performer');
-    }
-
-    user.currentRole = newRole;
-    return this.userRepository.save(user);
+    return savedUser;
   }
 
+  async updateRefreshToken(userId: number, refreshToken: string): Promise<void> {
+    await this.usersRepository.update(userId, { refreshToken: refreshToken || null });
+  }
+
+  async updateOtp(userId: number, otp: string | null, otpExpiry: Date | null): Promise<void> {
+    await this.usersRepository.update(userId, { otp, otpExpiry });
+  }
+
+  async updatePassword(userId: number, password: string): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (user) {
+      user.password = password;
+      await this.usersRepository.save(user);
+    }
+  }
+  
+//USER
+  // Add UpdateUserDto to your imports at the top
+// import { UpdateUserDto } from './dto/update-user.dto'; 
+
+async updateMe(userId: number, updateUserDto: any) {
+  const user = await this.usersRepository.findOne({ where: { id: userId } });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  // Define which fields are allowed to be updated by the user themselves
+  const allowedUpdates = [
+    'fullName', 
+    'phone', 
+    'bio', 
+    'city', 
+    'country', 
+    'profileImage'
+  ];
+
+  // Merge only allowed fields into the user entity
+  Object.keys(updateUserDto).forEach((key) => {
+    if (allowedUpdates.includes(key)) {
+      user[key] = updateUserDto[key];
+    }
+  });
+
+  return await this.usersRepository.save(user);
+}
+
+async switchUserRole(userId: number, switchRoleDto: SwitchRoleDto) {
+  const user = await this.usersRepository.findOne({ where: { id: userId } });
+  if (!user) throw new NotFoundException('User not found');
+
+  // Business Logic: If switching to PERFORMER, check verification
+  // if (switchRoleDto.role === UserRole.PERFORMER && !user.isIdentityVerified) {
+  //   throw new BadRequestException('You must complete identity verification to enter Performer mode.');
+  // }
+
+  user.currentRole = switchRoleDto.role;
+  user.isPerformer = (switchRoleDto.role === UserRole.PERFORMER);
+
+  return await this.usersRepository.save(user);
+}
   
 }

@@ -4,38 +4,52 @@ import {
   Param,
   UseGuards,
   ParseIntPipe,
+  HttpException,
+  NotFoundException,
 } from '@nestjs/common';
 import { StatsService } from './stats.service';
+import { UsersService } from '@/users/users.service'; // Add this import
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 
 @Controller('stats')
 @UseGuards(JwtAuthGuard)
 export class StatsController {
-  constructor(private readonly statsService: StatsService) {}
+  constructor(
+    private readonly statsService: StatsService,
+    private readonly usersService: UsersService, // Inject UsersService
+  ) {}
 
   @Get('performer/:userId')
   async getPerformerStats(@Param('userId', ParseIntPipe) userId: number) {
     try {
-      // Try to get existing stats
       return await this.statsService.getPerformerStats(userId.toString());
-    } catch (error) {
-      // If service threw 404, create the defaults on the fly
+    } catch (error: any) {
       if (error.status === 404) {
-        const newStats = await this.statsService.createDefaultStats(userId);
-        return newStats.performer;
+        // 1. Find the user object first
+       const user = await this.usersService.findOneBy({ id: userId });
+        if (!user) throw new NotFoundException('User not found');
+
+        // 2. Pass the user object to the service
+        await this.statsService.createInitialStats(user);
+        
+        // 3. Try fetching the stats again
+        return await this.statsService.getPerformerStats(userId.toString());
       }
-      throw error; // Re-throw if it's a different error (like DB connection)
+      throw error;
     }
   }
 
-@Get('requester/:userId')
+  @Get('requester/:userId')
   async getRequesterStats(@Param('userId', ParseIntPipe) userId: number) {
     try {
       return await this.statsService.getRequesterStats(userId.toString());
-    } catch (error) {
+    } catch (error: any) {
       if (error.status === 404) {
-        const newStats = await this.statsService.createDefaultStats(userId);
-        return newStats.requester;
+        const user = await this.usersService.findOneBy({ id: userId });
+        if (!user) throw new NotFoundException('User not found');
+
+        await this.statsService.createInitialStats(user);
+        return await this.statsService.getRequesterStats(userId.toString());
       }
       throw error;
     }

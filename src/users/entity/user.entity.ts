@@ -6,9 +6,10 @@ import {
   OneToOne,
   OneToMany,
   JoinColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
-import { Exclude } from 'class-transformer';
+import { Exclude, Expose } from 'class-transformer'; // Added Expose
 import * as bcrypt from 'bcrypt';
 import { PerformerStats } from '@/stats/entities/performer-stats.entity';
 import { RequesterStats } from '@/stats/entities/requester-stats.entity';
@@ -20,6 +21,11 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+export enum UserStatus {
+  ACTIVE = 'active',
+  BANNED = 'banned',
+}
+
 @Entity('users')
 export class UserEntity extends BaseEntity {
   @Column({ name: 'FullName' })
@@ -28,8 +34,8 @@ export class UserEntity extends BaseEntity {
   @Column({ unique: true })
   email!: string;
 
-  @Column()
   @Exclude()
+  @Column()
   password!: string;
 
   @Column({ nullable: true })
@@ -47,7 +53,8 @@ export class UserEntity extends BaseEntity {
   @Column({ name: 'is_verified', default: false })
   isVerified!: boolean;
 
-  @Column({ name: 'is_performer', default: true })
+  @Exclude({ toPlainOnly: true }) 
+  @Column({ name: 'is_performer', default: false })
   isPerformer!: boolean;
 
   @Column({
@@ -57,6 +64,21 @@ export class UserEntity extends BaseEntity {
     default: UserRole.REQUESTER,
   })
   currentRole!: UserRole;
+
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.ACTIVE,
+  })
+  status!: UserStatus;
+
+  // --- FIGMA VIRTUAL FIELDS ---
+  // Added @Expose so these stay visible during serialization
+  @Expose()
+  verificationStatus?: string;
+
+  @Expose()
+  displayStatus?: string;
 
   @Column({ nullable: true })
   bio?: string;
@@ -76,21 +98,20 @@ export class UserEntity extends BaseEntity {
   @Column({ type: 'float', nullable: true })
   longitude?: number;
 
-  // ================= AUTH =================
-
-  @Column({ name: 'refresh_token', type: 'text', nullable: true })
   @Exclude()
+  @Column({ name: 'refresh_token', type: 'text', nullable: true })
   refreshToken?: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
   @Exclude()
+  @Column({ type: 'varchar', nullable: true })
   otp?: string | null;
 
-  @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   @Exclude()
+  @Column({ name: 'otp_expiry', type: 'timestamp', nullable: true })
   otpExpiry?: Date | null;
 
-  // ================= RELATIONS =================
+  @DeleteDateColumn({ name: 'deleted_at', nullable: true })
+  deletedAt?: Date;
 
   @OneToOne(() => PerformerStats, (stats) => stats.user)
   @JoinColumn()
@@ -105,8 +126,6 @@ export class UserEntity extends BaseEntity {
     (verification) => verification.user,
   )
   identityVerifications!: IdentityVerificationEntity[];
-
-  // ================= PASSWORD =================
 
   @BeforeInsert()
   @BeforeUpdate()

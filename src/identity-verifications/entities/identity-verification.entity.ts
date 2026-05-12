@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Entity,
   ManyToOne,
   JoinColumn,
@@ -19,24 +20,19 @@ export class IdentityVerificationEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  // ================= USER =================
-
-  @Column()
-  user_id!: number;
-
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  /**
+   * We remove the manual @Column({ user_id }) here.
+   * The @JoinColumn below will create the 'user_id' column in the database automatically.
+   */
+  @ManyToOne(() => UserEntity, (user) => user.identityVerifications, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 
-  // ================= FILES =================
+  @Column({ type: 'varchar', nullable: true })
+  id_card_url!: string | null;
 
-  @Column()
-  id_card_url!: string;
-
-  @Column()
-  selfie_url!: string;
-
-  // ================= STATUS =================
+  @Column({ type: 'varchar', nullable: true })
+  selfie_url!: string | null;
 
   @Column({
     type: 'enum',
@@ -46,9 +42,7 @@ export class IdentityVerificationEntity {
   status!: VerificationStatus;
 
   @Column({ type: 'text', nullable: true })
-  rejection_reason?: string;
-
-  // ================= REVIEW =================
+  rejection_reason?: string | null;
 
   @Column({ nullable: true })
   reviewed_by?: number;
@@ -58,10 +52,11 @@ export class IdentityVerificationEntity {
   reviewer?: UserEntity;
 
   @Column({ type: 'timestamp', nullable: true })
-  reviewed_at?: Date;
-
-  // ================= TIME =================
+  reviewed_at?: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
-  created_at!: Date;
+  created_at!: Date | null;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updated_at!: Date;
 }

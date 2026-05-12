@@ -31,6 +31,18 @@ interface RequestWithUser extends ExpressRequest {
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
+  private readonly cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+  };
+
+  private readonly roleCookieOptions = {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+  };
 
   @Public()
   @Post('login')
@@ -42,22 +54,17 @@ export class AuthController {
     const session = await this.authService.login(loginDto);
 
     res.cookie('access_token', session.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 60 * 1000, // 30 minutes
+      ...this.cookieOptions,
+      maxAge: 24 * 60 * 60 * 1000, // 1 days
     });
 
     res.cookie('refresh_token', session.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.cookie('user_role', session.user.role, {
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.roleCookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -90,9 +97,9 @@ export class AuthController {
     await this.authService.logout(req.user.id);
 
     // Clear cookies
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
-    res.clearCookie('user_role');
+    res.clearCookie('access_token', this.cookieOptions);
+    res.clearCookie('refresh_token', this.cookieOptions);
+    res.clearCookie('user_role', this.roleCookieOptions);
 
     return { message: 'Logged out successfully' };
   }
@@ -112,16 +119,12 @@ export class AuthController {
     );
 
     res.cookie('access_token', session.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 60 * 1000, // 30 minutes
+      ...this.cookieOptions,
+      maxAge: 24 * 60 * 60 * 1000, // 1 days
     });
 
     res.cookie('refresh_token', session.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -162,27 +165,22 @@ export class AuthController {
     const session = await this.authService.generateTokens(user);
 
     res.cookie('access_token', session.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 60 * 1000, // 30 minutes
+      ...this.cookieOptions,
+      maxAge: 24 * 60 * 60 * 1000, // 1 days
     });
 
     res.cookie('refresh_token', session.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.cookie('user_role', session.user.role, {
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.roleCookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     return res.redirect(
-      `http://localhost:3000/auth/callback?token=${session.accessToken}`,
+      `http://localhost:3000/auth/callback?token=${session.accessToken}&role=${session.user.role}`,
     );
   }
 
@@ -196,22 +194,17 @@ export class AuthController {
     const session = await this.authService.verifyGoogleToken(body.token);
 
     res.cookie('access_token', session.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 30 * 60 * 1000, // 30 minutes
+      ...this.cookieOptions,
+      maxAge: 24 * 60 * 60 * 1000, // 1 days
     });
 
     res.cookie('refresh_token', session.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.cookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.cookie('user_role', session.user.role, {
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      ...this.roleCookieOptions,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
