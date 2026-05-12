@@ -1,5 +1,6 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
+<<<<<<< HEAD
 import { CategoryEntity } from '@/categories/entities/category.entity';
 import {
   TaskEntity,
@@ -12,6 +13,9 @@ import {
 } from '@/applications/entities/task-application.entity';
 import * as bcrypt from 'bcrypt';
 
+=======
+import { CategoryEntity } from '../categories/entities/category.entity';
+>>>>>>> ce7d93c (Refactor category entity and service references; update task module imports)
 const seedDatabase = async () => {
   try {
     // Initialize database connection
@@ -20,6 +24,7 @@ const seedDatabase = async () => {
     }
 
     const userRepository = AppDataSource.getRepository(UserEntity);
+<<<<<<< HEAD
     const categoryRepository =
       AppDataSource.getRepository(CategoryEntity);
     const taskRepository =
@@ -29,6 +34,9 @@ const seedDatabase = async () => {
       AppDataSource.getRepository(
         TaskApplicationEntity,
       );
+=======
+    const categoryRepository = AppDataSource.getRepository(CategoryEntity);
+>>>>>>> ce7d93c (Refactor category entity and service references; update task module imports)
 
     console.log('Starting database seed...');
 
