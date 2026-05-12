@@ -1,16 +1,22 @@
-import { BadRequestException, Delete, Injectable, NotFoundException, Param } from '@nestjs/common';
+import {
+  BadRequestException,
+  Delete,
+  Injectable,
+  NotFoundException,
+  Param,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 
-import { Category } from './entities/category.entity';
+import { CategoryEntity } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoriesService {
   constructor(
-    @InjectRepository(Category)
-    private categoryRepo: Repository<Category>,
+    @InjectRepository(CategoryEntity)
+    private categoryRepo: Repository<CategoryEntity>,
   ) {}
 
   async create(dto: CreateCategoryDto) {
@@ -64,5 +70,4 @@ export class CategoriesService {
 
     return category;
   }
-
 }

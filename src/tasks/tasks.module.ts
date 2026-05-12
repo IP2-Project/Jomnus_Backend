@@ -4,21 +4,24 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TaskEntity } from './entities/task.entity';
 import { TasksService } from './tasks.service';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
-import { Category } from '@/categories/entities/category.entity';
+import { CategoryEntity } from '@/categories/entities/category.entity';
 import { CategoriesModule } from '@/categories/categories.module';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
 import { StatsModule } from '@/stats/stats.module';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity, TaskApplicationEntity]),
-        CategoriesModule,
-        StatsModule, // ✅ ADD THIS
-    ],
-    controllers: [TasksController],
-    providers: [TasksService],
-
-    exports: [TasksService]
+  imports: [
+    TypeOrmModule.forFeature([
+      TaskEntity,
+      TaskCategory,
+      CategoryEntity,
+      ConversationsEntity,
+    ]),
+    CategoriesModule,
+  ],
+  controllers: [TasksController],
+  providers: [TasksService],
+  exports: [TasksService],
 })
 export class TasksModule {}
