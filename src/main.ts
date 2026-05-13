@@ -12,7 +12,7 @@ async function bootstrap() {
     origin:
       process.env.CORS_ORIGIN ||
       'http://localhost:3000' ||
-      'https://jomnusapi.gic26.tech/api',
+      'https://jomnusapi.gic26.tech/',
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -20,8 +20,6 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
-
-  // Serve static files from the project root's uploads folder
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });
@@ -33,9 +31,7 @@ async function bootstrap() {
     }),
   );
 
-  // --- ADD THIS LINE TO FIX THE PASSWORD EXCLUSION ---
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
-  // --------------------------------------------------
 
   app.use(cookieParser());
 
