@@ -8,11 +8,12 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim());
+
   app.enableCors({
-    origin:
-      process.env.CORS_ORIGIN ||
-      'http://localhost:3000' ||
-      'https://jomnus.gic26.tech/',
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
