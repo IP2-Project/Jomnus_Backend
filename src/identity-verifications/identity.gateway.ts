@@ -9,10 +9,15 @@ import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // For development. In production, use your frontend URL.
+    origin: (process.env.CORS_ORIGINS || 'http://localhost:3000')
+      .split(',')
+      .map((origin) => origin.trim()),
+    credentials: true,
   },
 })
-export class IdentityGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class IdentityGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server!: Server;
 
