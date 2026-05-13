@@ -10,10 +10,16 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
+    const callbackURL =
+      configService.get<string>('GOOGLE_CALLBACK_URL') ||
+      (configService.get<string>('NODE_ENV') === 'production'
+        ? 'https://jomnus.gic26.tech/api/auth/google/callback'
+        : 'http://localhost:3222/api/auth/google/callback');
+
     super({
       clientID: configService.get<string>('GOOGLE_CLIENT_ID'),
       clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
-      callbackURL: 'http://localhost:3001/api/auth/google/callback',
+      callbackURL,
       scope: ['email', 'profile'],
       prompt: 'consent select_account',
       accessType: 'offline',
@@ -29,7 +35,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   ): Promise<any> {
     const { emails, displayName, photos } = profile;
     const email = emails[0].value;
-    const profileImage = photos && photos.length > 0 ? photos[0].value : undefined;
+    const profileImage =
+      photos && photos.length > 0 ? photos[0].value : undefined;
 
     const user = await this.authService.validateOrCreateGoogleUser({
       email,
