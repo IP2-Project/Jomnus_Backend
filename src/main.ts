@@ -12,7 +12,7 @@ async function bootstrap() {
     origin:
       process.env.CORS_ORIGIN ||
       'http://localhost:3000' ||
-      'https://jomnusapi.gic26.tech/',
+      'https://jomnus.gic26.tech/',
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
