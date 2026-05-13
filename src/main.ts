@@ -9,7 +9,10 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin:
+      process.env.CORS_ORIGIN ||
+      'http://localhost:3000' ||
+      'https://jomnusapi.gic26.tech/api',
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -35,7 +38,7 @@ async function bootstrap() {
   // --------------------------------------------------
 
   app.use(cookieParser());
-  
+
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}/api`);
