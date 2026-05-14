@@ -7,10 +7,11 @@ import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { Category } from '@/categories/entities/category.entity';
 import { CategoriesModule } from '@/categories/categories.module';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
+import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity]),
+        TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity, TaskApplicationEntity]),
         CategoriesModule
     ],
     controllers: [TasksController],

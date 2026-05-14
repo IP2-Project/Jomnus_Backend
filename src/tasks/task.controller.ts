@@ -28,8 +28,8 @@ export class TasksController {
   }
 
   @Get()
-  findAll() {
-    return this.tasksService.findAll();
+  findAll(@GetUser('id') userId: number) {
+    return this.tasksService.findAll(userId);
   }
 
   @Get('me')
