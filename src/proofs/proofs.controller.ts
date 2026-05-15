@@ -46,6 +46,15 @@ export class ProofsController {
     }
   }
 
+  @Get(':assignmentId')
+  findByAssignment(
+      @Param('assignmentId') assignmentId: number,
+  ) {
+      return this.proofsService.findByAssignment(
+          Number(assignmentId),
+      );
+  }
+
   @Get()
   async getAllProofs() {
     return this.proofsService.getAllProofs();

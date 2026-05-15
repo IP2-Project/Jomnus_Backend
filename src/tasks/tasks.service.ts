@@ -5,14 +5,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
-import { TaskEntity } from './entities/task.entity';
+import { TaskEntity, TaskStatus } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoriesService } from '@/categories/categories.service';
 import { UserEntity, UserRole } from '@/users/entity/user.entity';
+import {
+  ApplicationStatus,
+  TaskApplicationEntity,
+} from '@/applications/entities/task-application.entity';
 
 @Injectable()
 export class TasksService {
@@ -22,6 +26,9 @@ export class TasksService {
 
     @InjectRepository(TaskCategory)
     private taskCategoryRepo: Repository<TaskCategory>,
+
+    @InjectRepository(TaskApplicationEntity)
+    private taskApplicationRepo: Repository<TaskApplicationEntity>,
 
     private categoriesService: CategoriesService,
   ) {}
@@ -69,11 +76,52 @@ export class TasksService {
     return task;
   }
 
-  async findAll() {
-    return this.taskRepo.find({
+  async findAll(userId: number) {
+    const tasks = await this.taskRepo.find({
+      where: {
+        status: TaskStatus.POSTED ,
+      },
       relations: ['requester'],
       order: { created_at: 'DESC' },
     });
+
+    if (!tasks.length) {
+      return [];
+    }
+
+    const taskIds = tasks.map((task) => task.id);
+    const applications = await this.taskApplicationRepo.find({
+      where: { task_id: In(taskIds) },
+      select: ['task_id', 'performer_id', 'status'],
+    });
+
+    const acceptedCountByTask = applications.reduce<Record<number, number>>(
+      (counts, application) => {
+        if (application.status === ApplicationStatus.ACCEPTED) {
+          counts[application.task_id] = (counts[application.task_id] ?? 0) + 1;
+        }
+
+        return counts;
+      },
+      {},
+    );
+
+    const appliedTaskIds = new Set(
+      applications
+        .filter((application) => application.performer_id === userId)
+        .map((application) => application.task_id),
+    );
+
+    return tasks
+      .filter(
+        (task) =>
+          (acceptedCountByTask[task.id] ?? 0) < task.required_workers,
+      )
+      .map((task) => ({
+        ...this.mapTaskWithRequester(task),
+        acceptedWorkers: acceptedCountByTask[task.id] ?? 0,
+        hasApplied: appliedTaskIds.has(task.id),
+      }));
   }
 
 
@@ -126,6 +174,21 @@ export class TasksService {
       task.deadline,
     );
 
+    const acceptedCount = await this.taskApplicationRepo.count({
+      where: {
+        task_id: task.id,
+        status: ApplicationStatus.ACCEPTED,
+      },
+    });
+
+    if (
+      dto.requiredWorkers &&
+      dto.requiredWorkers < acceptedCount
+    ) {
+      throw new BadRequestException(
+        `Cannot reduce workers below accepted count (${acceptedCount})`,
+      );
+    }
     await this.taskRepo.update(id, {
       title: dto.title,
       description: dto.description,
@@ -142,11 +205,32 @@ export class TasksService {
     return this.findOne(id);
   }
 
-  async remove(id: number) {
+  async remove(id: number, user: UserEntity) {
     const task = await this.taskRepo.findOne({ where: { id } });
 
     if (!task) {
       throw new NotFoundException('Task not found');
+    }
+
+    if (
+      user.currentRole !== UserRole.ADMIN &&
+      task.requester_id !== user.id
+    ) {
+      throw new ForbiddenException();
+    }
+
+    const acceptedAssignments =
+      await this.taskApplicationRepo.count({
+        where: {
+          task_id: id,
+          status: ApplicationStatus.ACCEPTED,
+        },
+      });
+
+    if (acceptedAssignments > 0) {
+      throw new BadRequestException(
+        'Cannot delete task with active workers',
+      );
     }
 
     return this.taskRepo.remove(task);

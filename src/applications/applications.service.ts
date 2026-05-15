@@ -28,8 +28,7 @@ export class ApplicationsService {
         }
 
         if (
-            task.status !== TaskStatus.POSTED &&
-            task.status !== TaskStatus.ACCEPTED
+            task.status !== TaskStatus.POSTED
         ) {
             throw new BadRequestException(
                 'Task is no longer accepting applications'
@@ -195,8 +194,7 @@ export class ApplicationsService {
         }
 
         if (
-            task.status !== TaskStatus.POSTED &&
-            task.status !== TaskStatus.ACCEPTED
+            task.status !== TaskStatus.POSTED
         ) {
             throw new BadRequestException('Task not accepting applications');
         }
@@ -222,15 +220,6 @@ export class ApplicationsService {
             application.id,
             application.offered_price 
         );
-
-        if (task.status === TaskStatus.POSTED) {
-            const requester = await this.userService.findById(task.requester_id);
-            await this.tasksService.update(
-                task.id,
-                { status: TaskStatus.ACCEPTED },
-                requester!,
-            );
-        }
 
         return { message: 'Application accepted' };
     }
