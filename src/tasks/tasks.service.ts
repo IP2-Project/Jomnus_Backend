@@ -78,10 +78,9 @@ export class TasksService {
 
   async findAll(userId: number) {
     const tasks = await this.taskRepo.find({
-      where: [
-        { status: TaskStatus.POSTED },
-        { status: TaskStatus.ACCEPTED },
-      ],
+      where: {
+        status: TaskStatus.OPEN ,
+      },
       relations: ['requester'],
       order: { created_at: 'DESC' },
     });

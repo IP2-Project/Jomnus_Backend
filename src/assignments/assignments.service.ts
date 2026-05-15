@@ -55,10 +55,6 @@ export class AssignmentsService {
             status: AssignmentStatus.IN_PROGRESS,
         });
 
-        await this.taskRepo.update(assignment.task_id, {
-            status: TaskStatus.IN_PROGRESS,
-        });
-
         return { message: 'Marked as in progress' };
     }
 
