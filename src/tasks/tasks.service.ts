@@ -79,7 +79,7 @@ export class TasksService {
   async findAll(userId: number) {
     const tasks = await this.taskRepo.find({
       where: {
-        status: TaskStatus.OPEN ,
+        status: TaskStatus.POSTED ,
       },
       relations: ['requester'],
       order: { created_at: 'DESC' },
@@ -174,6 +174,21 @@ export class TasksService {
       task.deadline,
     );
 
+    const acceptedCount = await this.taskApplicationRepo.count({
+      where: {
+        task_id: task.id,
+        status: ApplicationStatus.ACCEPTED,
+      },
+    });
+
+    if (
+      dto.requiredWorkers &&
+      dto.requiredWorkers < acceptedCount
+    ) {
+      throw new BadRequestException(
+        `Cannot reduce workers below accepted count (${acceptedCount})`,
+      );
+    }
     await this.taskRepo.update(id, {
       title: dto.title,
       description: dto.description,
@@ -190,11 +205,32 @@ export class TasksService {
     return this.findOne(id);
   }
 
-  async remove(id: number) {
+  async remove(id: number, user: UserEntity) {
     const task = await this.taskRepo.findOne({ where: { id } });
 
     if (!task) {
       throw new NotFoundException('Task not found');
+    }
+
+    if (
+      user.currentRole !== UserRole.ADMIN &&
+      task.requester_id !== user.id
+    ) {
+      throw new ForbiddenException();
+    }
+
+    const acceptedAssignments =
+      await this.taskApplicationRepo.count({
+        where: {
+          task_id: id,
+          status: ApplicationStatus.ACCEPTED,
+        },
+      });
+
+    if (acceptedAssignments > 0) {
+      throw new BadRequestException(
+        'Cannot delete task with active workers',
+      );
     }
 
     return this.taskRepo.remove(task);

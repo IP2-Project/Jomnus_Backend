@@ -28,7 +28,7 @@ export class ApplicationsService {
         }
 
         if (
-            task.status !== TaskStatus.OPEN
+            task.status !== TaskStatus.POSTED
         ) {
             throw new BadRequestException(
                 'Task is no longer accepting applications'
@@ -194,7 +194,7 @@ export class ApplicationsService {
         }
 
         if (
-            task.status !== TaskStatus.OPEN
+            task.status !== TaskStatus.POSTED
         ) {
             throw new BadRequestException('Task not accepting applications');
         }

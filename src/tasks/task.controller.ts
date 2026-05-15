@@ -53,7 +53,7 @@ export class TasksController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tasksService.remove(Number(id));
+  remove(@Param('id') id: string, @Req() req) {
+    return this.tasksService.remove(Number(id), req.user);
   }
 }

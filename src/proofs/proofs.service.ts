@@ -122,4 +122,16 @@ export class ProofsService {
     });
   }
 
+  async findByAssignment(assignmentId: number) {
+      return this.proofRepository.find({
+          where: {
+              assignment_id: assignmentId,
+          },
+
+          order: {
+              created_at: 'DESC',
+          },
+      });
+  }
+
 }

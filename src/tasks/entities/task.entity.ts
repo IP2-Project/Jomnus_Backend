@@ -13,8 +13,12 @@ import { ConversationsEntity } from '@/conversations/entity/conversations.entity
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 
 export enum TaskStatus {
-  OPEN = 'OPEN',
+  POSTED = 'POSTED',
+  ACCEPTED = 'ACCEPTED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  PARTIAL_COMPLETED = 'PARTIAL_COMPLETED',
   COMPLETED = 'COMPLETED',
+  VERIFIED = 'VERIFIED',
   CANCELLED = 'CANCELLED',
 }
 @Entity('tasks')
@@ -50,7 +54,7 @@ export class TaskEntity {
   @Column({
     type: 'enum',
     enum: TaskStatus,
-    default: TaskStatus.OPEN,
+    default: TaskStatus.POSTED,
   })
   status!: TaskStatus;
 
