@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
-import { TaskEntity } from '@/tasks/entities/task.entity';
+import { TaskEntity, TaskStatus } from '@/tasks/entities/task.entity';
 
 @Injectable()
 export class AssignmentsService {
@@ -21,6 +21,7 @@ export class AssignmentsService {
         performer_id: performerId,
         application_id: applicationId,
         accepted_price: price,  
+        status: AssignmentStatus.ASSIGNED,
         });
 
         return this.assignRepo.save(assignment);
@@ -29,7 +30,33 @@ export class AssignmentsService {
     findByTask(taskId: number) {
         return this.assignRepo.find({
         where: { task_id: taskId },
+        relations: ['performer', 'application'],
         });
+    }
+
+    async startAssignment(id: number, user: UserEntity) {
+        const assignment = await this.assignRepo.findOne({
+            where: { id },
+        });
+
+        if (!assignment) {
+            throw new NotFoundException('Assignment not found');
+        }
+
+        if (assignment.performer_id !== user.id) {
+            throw new ForbiddenException();
+        }
+
+        if (assignment.status !== AssignmentStatus.ASSIGNED) {
+            throw new BadRequestException('Assignment has already started');
+        }
+
+        await this.assignRepo.update(id, {
+            status: AssignmentStatus.IN_PROGRESS,
+        });
+
+
+        return { message: 'Marked as in progress' };
     }
 
 
@@ -87,6 +114,19 @@ export class AssignmentsService {
             status: AssignmentStatus.COMPLETED,
         });
 
+        const allAssignments = await this.assignRepo.find({
+            where: {
+                task_id: assignment.task_id,
+            },
+        });
+
+        const completedCount = allAssignments.filter(
+            (a) =>
+                a.status === AssignmentStatus.COMPLETED ||
+                a.status === AssignmentStatus.VERIFIED,
+        ).length;
+
+
         return { message: 'Marked as completed' };
     }
 
@@ -105,7 +145,6 @@ export class AssignmentsService {
 
         if (!task) throw new NotFoundException('Task not found');
 
-        // 🔐 Only requester
         if (task.requester_id !== user.id) {
             throw new ForbiddenException();
         }
@@ -119,6 +158,25 @@ export class AssignmentsService {
             is_verified: true,
             verified_at: new Date(),
         });
+
+        await this.refreshTaskStatus(assignment.task_id);
+
+
+        const allAssignments = await this.assignRepo.find({
+            where: {
+                task_id: assignment.task_id,
+            },
+        });
+
+        const allVerified = allAssignments.every(
+            (a) => a.status === AssignmentStatus.VERIFIED,
+        );
+
+        if (allVerified) {
+            await this.taskRepo.update(assignment.task_id, {
+                status: TaskStatus.COMPLETED,
+            });
+        }
 
         return { message: 'Verified successfully' };
     }
@@ -148,6 +206,57 @@ export class AssignmentsService {
         });
 
         return { message: 'Cancelled' };
+    }
+
+
+    private async refreshTaskStatus(taskId: number) {
+        const assignments = await this.assignRepo.find({
+            where: { task_id: taskId },
+        });
+
+        const task = await this.taskRepo.findOne({
+            where: { id: taskId },
+        });
+
+        if (!task) return;
+
+        const verifiedCount = assignments.filter(
+            (a) => a.status === AssignmentStatus.VERIFIED,
+        ).length;
+
+        const acceptedCount = assignments.length;
+
+        // nobody accepted yet
+        if (acceptedCount === 0) {
+            await this.taskRepo.update(taskId, {
+                status: TaskStatus.POSTED,
+            });
+
+            return;
+        }
+
+        // some accepted
+        if (verifiedCount === 0) {
+            await this.taskRepo.update(taskId, {
+                status: TaskStatus.ACCEPTED,
+            });
+
+            return;
+        }
+
+        // partially completed
+        if (verifiedCount < task.required_workers) {
+            await this.taskRepo.update(taskId, {
+                status: TaskStatus.PARTIAL_COMPLETED,
+            });
+
+            return;
+        }
+
+        // fully completed
+        await this.taskRepo.update(taskId, {
+            status: TaskStatus.COMPLETED,
+        });
     }
 
 }

@@ -42,7 +42,7 @@ export class TaskAssignmentEntity {
   @Column({
     type: 'enum',
     enum: AssignmentStatus,
-    default: AssignmentStatus.IN_PROGRESS,
+    default: AssignmentStatus.ASSIGNED,
   })
   status!: AssignmentStatus;
 

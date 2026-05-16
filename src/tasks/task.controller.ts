@@ -28,8 +28,8 @@ export class TasksController {
   }
 
   @Get()
-  findAll() {
-    return this.tasksService.findAll();
+  findAll(@GetUser('id') userId: number) {
+    return this.tasksService.findAll(userId);
   }
 
   @Get('me')
@@ -53,7 +53,7 @@ export class TasksController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.tasksService.remove(Number(id));
+  remove(@Param('id') id: string, @Req() req) {
+    return this.tasksService.remove(Number(id), req.user);
   }
 }

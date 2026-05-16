@@ -14,13 +14,13 @@ import { TaskCategory } from '@/categories/entities/task-category.entity';
 
 export enum TaskStatus {
   POSTED = 'POSTED',
+  ACCEPTED = 'ACCEPTED',
   IN_PROGRESS = 'IN_PROGRESS',
   PARTIAL_COMPLETED = 'PARTIAL_COMPLETED',
   COMPLETED = 'COMPLETED',
   VERIFIED = 'VERIFIED',
   CANCELLED = 'CANCELLED',
 }
-
 @Entity('tasks')
 export class TaskEntity {
   @PrimaryGeneratedColumn()
@@ -41,6 +41,9 @@ export class TaskEntity {
 
   @Column('float')
   price!: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  start_date?: Date;
 
   @Column({ type: 'timestamp' })
   deadline!: Date;
