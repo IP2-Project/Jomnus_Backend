@@ -13,15 +13,9 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoriesService } from '@/categories/categories.service';
 import { UserEntity, UserRole } from '@/users/entity/user.entity';
-<<<<<<< HEAD
-import {
-  ApplicationStatus,
-  TaskApplicationEntity,
-} from '@/applications/entities/task-application.entity';
-=======
 import { RequesterStatsService } from '@/stats/requester-stats.service';
 import { PerformerStatsService } from '@/stats/performer-stats.service';
->>>>>>> 083b8e3 (update on user, stats and task)
+import { ApplicationStatus, TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
 @Injectable()
 export class TasksService {
