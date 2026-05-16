@@ -13,20 +13,12 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoriesService } from '@/categories/categories.service';
 import { UserEntity, UserRole } from '@/users/entity/user.entity';
-<<<<<<< HEAD
 import {
   ApplicationStatus,
   TaskApplicationEntity,
 } from '@/applications/entities/task-application.entity';
-<<<<<<< HEAD
 import { RequesterStatsService } from '@/stats/requester-stats.service';
 import { PerformerStatsService } from '@/stats/performer-stats.service';
-=======
-=======
-import { RequesterStatsService } from '@/stats/requester-stats.service';
-import { PerformerStatsService } from '@/stats/performer-stats.service';
->>>>>>> 083b8e3 (update on user, stats and task)
->>>>>>> efd7c1e (update on user, stats and task)
 
 @Injectable()
 export class TasksService {
@@ -49,7 +41,6 @@ export class TasksService {
 
   private mapTaskWithRequester(task: TaskEntity, categories?: unknown) {
     return {
-<<<<<<< HEAD
       ...task,
       requester: task.requester
           ? {
@@ -57,14 +48,6 @@ export class TasksService {
             fullName: task.requester.fullName,
             email: task.requester.email,
             profileImage: task.requester.profileImage,
-=======
-      ...taskData,
-      requester: requester
-        ? {
-            id: requester.id,
-            fullName: requester.fullName,
-            profile_image: requester.profileImage,
->>>>>>> efd7c1e (update on user, stats and task)
           }
           : null,
       ...(categories ? { categories } : {}),
@@ -88,13 +71,8 @@ export class TasksService {
     });
 
      // 🔥 ADD THIS (IMPORTANT)
-<<<<<<< HEAD
     await this.requesterStatsService.incrementTaskPosted(userId);
     // await this.performerStatsService.incrementCompletedTasks(userId); 
-=======
-    await this.requesterStatsService.incrementTasksPosted(userId);
-    await this.performerStatsService.incrementCompletedTasks(userId); 
->>>>>>> efd7c1e (update on user, stats and task)
     
 
     if (dto.categoryIds?.length) {

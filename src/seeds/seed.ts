@@ -181,10 +181,6 @@ const seedDatabase = async () => {
         const newCategory = categoryRepository.create(categoryData);
         await categoryRepository.save(newCategory);
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 083b8e3 (update on user, stats and task)
         console.log(
           `Category created: ${categoryData.name}`,
         );
