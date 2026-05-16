@@ -20,9 +20,11 @@ import { StatsModule } from '@/stats/stats.module';
       TaskApplicationEntity,
     ]),
     CategoriesModule,
+    StatsModule,
   ],
   controllers: [TasksController],
   providers: [TasksService],
   exports: [TasksService],
+
 })
 export class TasksModule {}

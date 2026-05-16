@@ -17,6 +17,8 @@ import {
   ApplicationStatus,
   TaskApplicationEntity,
 } from '@/applications/entities/task-application.entity';
+import { RequesterStatsService } from '@/stats/requester-stats.service';
+import { PerformerStatsService } from '@/stats/performer-stats.service';
 
 @Injectable()
 export class TasksService {
@@ -68,6 +70,11 @@ export class TasksService {
       longitude: dto.longitude,
     });
   
+
+     // 🔥 ADD THIS (IMPORTANT)
+    await this.requesterStatsService.incrementTasksPosted(userId);
+    await this.performerStatsService.incrementCompletedTasks(userId); 
+    
 
     if (dto.categoryIds?.length) {
       const taskCategories = dto.categoryIds.map((categoryId) => ({

@@ -20,7 +20,7 @@ import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
     forwardRef(() => UsersModule), 
   ],
   controllers: [StatsController],
-  providers: [StatsService],
-  exports: [StatsService],
+  providers: [StatsService, RequesterStatsService, PerformerStatsService],
+  exports: [StatsService, RequesterStatsService, PerformerStatsService],
 })
 export class StatsModule {}

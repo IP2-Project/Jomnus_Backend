@@ -16,6 +16,8 @@ import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.enti
 import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
+import { RequesterStatsService } from '@/stats/requester-stats.service';
+import { PerformerStatsService } from '@/stats/performer-stats.service';
 
 @Injectable()
 export class UsersService {
@@ -30,6 +32,9 @@ export class UsersService {
     private auditLogRepository: Repository<AuditLogEntity>,
 
     private statsService: StatsService,
+
+    private requesterStatsService: RequesterStatsService,
+    private performerStatsService: PerformerStatsService,
 
     private dataSource: DataSource,
 
@@ -360,6 +365,10 @@ async BanUser(id: number, adminId: number) {
 
     if (!user) return null;
     
+
+    // const requesterStats = await this.requesterStatsService.getByUserId(id);
+    // const performerStats = await this.performerStatsService.getByUserId(id);
+
 
     if (user.identityVerifications) {
       user.identityVerifications = user.identityVerifications.map(v => ({
