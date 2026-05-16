@@ -13,10 +13,15 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoriesService } from '@/categories/categories.service';
 import { UserEntity, UserRole } from '@/users/entity/user.entity';
+<<<<<<< HEAD
 import {
   ApplicationStatus,
   TaskApplicationEntity,
 } from '@/applications/entities/task-application.entity';
+=======
+import { RequesterStatsService } from '@/stats/requester-stats.service';
+import { PerformerStatsService } from '@/stats/performer-stats.service';
+>>>>>>> 083b8e3 (update on user, stats and task)
 
 @Injectable()
 export class TasksService {
@@ -31,6 +36,10 @@ export class TasksService {
     private taskApplicationRepo: Repository<TaskApplicationEntity>,
 
     private categoriesService: CategoriesService,
+
+    private requesterStatsService: RequesterStatsService, // ✅ ADD THIS
+    private performerStatsService: PerformerStatsService, // ✅ ADD THIS
+
   ) {}
 
   private mapTaskWithRequester(task: TaskEntity, categories?: unknown) {
@@ -40,6 +49,7 @@ export class TasksService {
       ...taskData,
       requester: requester
         ? {
+            id: requester.id,
             fullName: requester.fullName,
             profile_image: requester.profileImage,
           }
@@ -63,6 +73,11 @@ export class TasksService {
       latitude: dto.latitude,
       longitude: dto.longitude,
     });
+
+     // 🔥 ADD THIS (IMPORTANT)
+    await this.requesterStatsService.incrementTasksPosted(userId);
+    await this.performerStatsService.incrementCompletedTasks(userId); 
+    
 
     if (dto.categoryIds?.length) {
       const taskCategories = dto.categoryIds.map((categoryId) => ({

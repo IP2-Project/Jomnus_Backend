@@ -7,6 +7,8 @@ import { StatsService } from './stats.service';
 import { StatsController } from './stats.controller';
 import { UsersModule } from '@/users/users.module';
 import { UsersService } from '@/users/users.service';
+import { PerformerStatsService } from './performer-stats.service';
+import { RequesterStatsService } from './requester-stats.service';
 
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { UsersService } from '@/users/users.service';
     forwardRef(() => UsersModule), 
   ],
   controllers: [StatsController],
-  providers: [StatsService],
-  exports: [StatsService],
+  providers: [StatsService, RequesterStatsService, PerformerStatsService],
+  exports: [StatsService, RequesterStatsService, PerformerStatsService],
 })
 export class StatsModule {}

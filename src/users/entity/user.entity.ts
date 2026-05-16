@@ -14,6 +14,8 @@ import * as bcrypt from 'bcrypt';
 import { PerformerStats } from '@/stats/entities/performer-stats.entity';
 import { RequesterStats } from '@/stats/entities/requester-stats.entity';
 import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
+import { TaskEntity } from '@/tasks/entities/task.entity';
+import { Review } from '@/reviews/entities/review.entity';
 
 export enum UserRole {
   REQUESTER = 'REQUESTER',
@@ -71,6 +73,15 @@ export class UserEntity extends BaseEntity {
     default: UserStatus.ACTIVE,
   })
   status!: UserStatus;
+
+  @OneToMany(() => TaskEntity, (task) => task.requester)
+  tasks!: TaskEntity[];
+
+  @OneToMany(() => Review, (review) => review.reviewer)
+  reviewsGiven!: Review[];
+
+  @OneToMany(() => Review, (review) => review.reviewee)
+  reviewsReceived!: Review[];
 
   // --- FIGMA VIRTUAL FIELDS ---
   // Added @Expose so these stay visible during serialization
