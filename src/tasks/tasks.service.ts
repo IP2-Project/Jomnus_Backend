@@ -17,8 +17,6 @@ import {
   ApplicationStatus,
   TaskApplicationEntity,
 } from '@/applications/entities/task-application.entity';
-import { RequesterStatsService } from '@/stats/requester-stats.service';
-import { PerformerStatsService } from '@/stats/performer-stats.service';
 
 @Injectable()
 export class TasksService {

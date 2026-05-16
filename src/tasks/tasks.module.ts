@@ -12,7 +12,7 @@ import { TaskApplicationEntity } from '@/applications/entities/task-application.
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity, TaskApplicationEntity]),
+        TypeOrmModule.forFeature([TaskEntity, TaskCategory, CategoryEntity, ConversationsEntity, TaskApplicationEntity]),
         CategoriesModule,
         StatsModule, // ✅ ADD THIS
     ],
