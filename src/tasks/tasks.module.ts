@@ -24,5 +24,6 @@ import { TaskApplicationEntity } from '@/applications/entities/task-application.
   controllers: [TasksController],
   providers: [TasksService],
   exports: [TasksService],
+  
 })
 export class TasksModule {}

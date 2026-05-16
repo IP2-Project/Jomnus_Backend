@@ -172,6 +172,24 @@ const seedDatabase = async () => {
       }
     }
 
+    for (const categoryData of categories) {
+      const categoryExists = await categoryRepository.findOne({
+        where: { name: categoryData.name },
+      });
+
+      if (!categoryExists) {
+        const newCategory = categoryRepository.create(categoryData);
+        await categoryRepository.save(newCategory);
+
+        console.log(
+          `Category created: ${categoryData.name}`,
+        );
+      } else {
+        console.log(
+          `Category already exists: ${categoryData.name}`,
+        );
+      }
+    }
     // =====================================================
 // TASKS
 // =====================================================
