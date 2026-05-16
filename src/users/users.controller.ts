@@ -73,6 +73,11 @@ export class UsersController {
         switchRoleDto,
       );
     }
+  
+    @Get(':id')
+    async findById(@Param('id', ParseIntPipe) id: number) {
+      return this.usersService.findById(id);
+    }
 
 
 
@@ -194,6 +199,13 @@ export class UsersController {
   }
 
   // --- GENERAL SEARCH ---
+
+  // @UseGuards(JwtAuthGuard)
+  // @Get(':id')
+  // async findById(@Param('id', ParseIntPipe) id: number, @Request() req) {
+  //   this.checkAdmin(req);
+  //   return this.usersService.findById(id);
+  // }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile/:id')

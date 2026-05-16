@@ -16,6 +16,8 @@ import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.enti
 import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
+import { RequesterStatsService } from '@/stats/requester-stats.service';
+import { PerformerStatsService } from '@/stats/performer-stats.service';
 
 @Injectable()
 export class UsersService {
@@ -30,6 +32,9 @@ export class UsersService {
     private auditLogRepository: Repository<AuditLogEntity>,
 
     private statsService: StatsService,
+
+    private requesterStatsService: RequesterStatsService,
+    private performerStatsService: PerformerStatsService,
 
     private dataSource: DataSource,
 
@@ -353,11 +358,20 @@ async BanUser(id: number, adminId: number) {
     
     const user = await this.usersRepository.createQueryBuilder('user')
       .leftJoinAndSelect('user.identityVerifications', 'verification')
+      .leftJoinAndSelect('user.tasks', 'tasks') // Pull the tasks from the DB
+      .leftJoinAndSelect('user.reviewsGiven', 'reviewsGiven')
+      .leftJoinAndSelect('user.reviewsReceived', 'reviewsReceived')
+      .leftJoinAndSelect('user.performerStats', 'performerStats')
+      .leftJoinAndSelect('user.requesterStats', 'requesterStats')
       .where('user.id = :id', { id })
       .orderBy('verification.id', 'DESC')
       .getOne();
 
     if (!user) return null;
+
+    // const requesterStats = await this.requesterStatsService.getByUserId(id);
+    // const performerStats = await this.performerStatsService.getByUserId(id);
+
 
     if (user.identityVerifications) {
       user.identityVerifications = user.identityVerifications.map(v => ({
@@ -367,7 +381,24 @@ async BanUser(id: number, adminId: number) {
       }));
     }
 
-    return user;
+    // --- MAP THE VIRTUAL STATS HERE ---
+    return {
+      ...user,
+      tasks_posted: user.tasks?.length || 0,
+      tasks_verified: user.tasks?.filter(t => t.status === 'VERIFIED').length || 0,
+      total_spent: user.tasks?.reduce((sum, t) => sum + (Number(t.price) || 0), 0) || 0,
+
+      // ✅ ADD REVIEWS
+      reviews_given: user.reviewsGiven || [],
+      reviews_received: user.reviewsReceived || [],
+
+      // ✅ ADD STATS (optional but recommended)
+      requester_stats: user.requesterStats || null,
+      performer_stats: user.performerStats || null,
+      
+    };
+
+    // return user;
   }
 
   async findAll(): Promise<UserEntity[]> {

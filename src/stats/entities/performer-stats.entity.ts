@@ -25,6 +25,6 @@ export class PerformerStats {
   @Column('float', { default: 0 })
   total_earnings!: number;
 
-  @Column({ nullable: true })
-  response_time!: number;
+  @Column({ type: 'int', nullable: true })
+  response_time!: number | null;
 }

@@ -7,15 +7,26 @@ import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { Category } from '@/categories/entities/category.entity';
 import { CategoriesModule } from '@/categories/categories.module';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
+<<<<<<< HEAD
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity, TaskApplicationEntity]),
         CategoriesModule
+=======
+import { StatsModule } from '@/stats/stats.module';
+
+@Module({
+    imports: [
+        TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity]),
+        CategoriesModule,
+        StatsModule, // ✅ ADD THIS
+>>>>>>> 083b8e3 (update on user, stats and task)
     ],
     controllers: [TasksController],
     providers: [TasksService],
+
     exports: [TasksService]
 })
 export class TasksModule {}
