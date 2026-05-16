@@ -7,24 +7,17 @@ import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoryEntity } from '@/categories/entities/category.entity';
 import { CategoriesModule } from '@/categories/categories.module';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
-import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 import { StatsModule } from '@/stats/stats.module';
+import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      TaskEntity,
-      TaskCategory,
-      CategoryEntity,
-      ConversationsEntity,
-      TaskApplicationEntity,
-    ]),
-    CategoriesModule,
-    StatsModule,
-  ],
-  controllers: [TasksController],
-  providers: [TasksService],
-  exports: [TasksService],
+    imports: [
+        TypeOrmModule.forFeature([TaskEntity, TaskCategory, Category, ConversationsEntity, TaskApplicationEntity]),
+        CategoriesModule,
+        StatsModule, // ✅ ADD THIS
+    ],
+    controllers: [TasksController],
+    providers: [TasksService],
 
 })
 export class TasksModule {}
