@@ -18,7 +18,10 @@ import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
 import { RequesterStatsService } from '@/stats/requester-stats.service';
 import { PerformerStatsService } from '@/stats/performer-stats.service';
+<<<<<<< HEAD
 import { AssignmentStatus } from '@/assignments/entities/assignment.entity';
+=======
+>>>>>>> efd7c1e (update on user, stats and task)
 
 @Injectable()
 export class UsersService {
@@ -360,7 +363,6 @@ async BanUser(id: number, adminId: number) {
       .leftJoinAndSelect('user.reviewsReceived', 'reviewsReceived')
       .leftJoinAndSelect('user.performerStats', 'performerStats')
       .leftJoinAndSelect('user.requesterStats', 'requesterStats')
-
       .where('user.id = :id', { id })
       .orderBy('verification.id', 'DESC')
       .getOne();
