@@ -19,6 +19,7 @@ import { SwitchRoleDto } from './dto/switch-role.dto';
 import { RequesterStatsService } from '@/stats/requester-stats.service';
 import { PerformerStatsService } from '@/stats/performer-stats.service';
 
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -359,7 +360,6 @@ async BanUser(id: number, adminId: number) {
       .leftJoinAndSelect('user.reviewsReceived', 'reviewsReceived')
       .leftJoinAndSelect('user.performerStats', 'performerStats')
       .leftJoinAndSelect('user.requesterStats', 'requesterStats')
-
       .where('user.id = :id', { id })
       .orderBy('verification.id', 'DESC')
       .getOne();

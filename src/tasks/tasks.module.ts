@@ -11,19 +11,12 @@ import { StatsModule } from '@/stats/stats.module';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      TaskEntity,
-      TaskCategory,
-      CategoryEntity,
-      ConversationsEntity,
-      TaskApplicationEntity,
-    ]),
-    CategoriesModule,
-  ],
-  controllers: [TasksController],
-  providers: [TasksService],
-  exports: [TasksService],
-  
+    imports: [
+        TypeOrmModule.forFeature([TaskEntity, TaskCategory, CategoryEntity, ConversationsEntity, TaskApplicationEntity]),
+        CategoriesModule
+    ],
+    controllers: [TasksController],
+    providers: [TasksService],
+    exports: [TasksService]
 })
 export class TasksModule {}
