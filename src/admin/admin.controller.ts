@@ -8,6 +8,9 @@ import {
   Patch,
   ParseIntPipe,
   BadRequestException,
+  Body,
+  Header,
+  Req, // 👈 Added Req import
 } from '@nestjs/common';
 import { adminServices } from './admin.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
@@ -101,6 +104,14 @@ export class adminController {
   }
 
   // ============ VERIFICATIONS MANAGEMENT ============
+  
+  @Get('verifications/export')
+  @Header('Content-Type', 'text/csv')
+  @Header('Content-Disposition', 'attachment; filename=\"verifications-export.csv\"')
+  async exportVerifications() {
+    return await this.adminServices.exportVerificationsToCsv();
+  }
+
   @Get('verifications')
   async getAllVerifications(
     @Query('page') page: string = '1',
@@ -117,8 +128,31 @@ export class adminController {
   }
 
   @Patch('verifications/:id/approve')
-  async approveVerification(@Param('id', ParseIntPipe) id: number) {
-    return await this.adminServices.verifyIdentity(id);
+  async approveVerification(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any // 👈 Captures user authentication context
+  ) {
+    const adminId = req.user?.id || 1; // Fallback to 1 if testing without custom guard extraction setup
+    return await this.adminServices.verifyIdentity(id, adminId);
+  }
+
+  @Patch('verifications/:id/reject')
+  async rejectVerification(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('reason') reason: string,
+    @Req() req: any
+  ) {
+    const adminId = req.user?.id || 1;
+    return await this.adminServices.rejectIdentity(id, reason, adminId);
+  }
+
+  @Patch('verifications/:id/reset')
+  async resetVerificationToPending(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any // 👈 Passed down request payload context
+  ) {
+    const adminId = req.user?.id || 1; 
+    return await this.adminServices.resetToPending(id, adminId); // 👈 Added adminId payload parameter
   }
 
   // ============ DASHBOARD STATS ============
@@ -133,7 +167,7 @@ export class adminController {
       totalUsers: users.length,
       totalTasks: tasks.length,
       totalAssignments: assignments.length,
-      totalVerifications: verifications.total,
+      totalVerifications: verifications.meta.totalItems,
       completedAssignments: assignments.filter(
         (a: any) => a.status === 'COMPLETED',
       ).length,

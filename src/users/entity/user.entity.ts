@@ -9,7 +9,7 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/common/entities/base.entity';
-import { Exclude, Expose } from 'class-transformer'; // Added Expose
+import { Exclude, Expose } from 'class-transformer'; 
 import * as bcrypt from 'bcrypt';
 import { PerformerStats } from '@/stats/entities/performer-stats.entity';
 import { RequesterStats } from '@/stats/entities/requester-stats.entity';
@@ -28,9 +28,11 @@ export enum UserStatus {
 
 @Entity('users')
 export class UserEntity extends BaseEntity {
+  @Expose() // 👈 CRITICAL: Unlocks full name from interceptor stripping
   @Column({ name: 'FullName' })
   fullName!: string;
 
+  @Expose() // 👈 CRITICAL: Unlocks email from interceptor stripping
   @Column({ unique: true })
   email!: string;
 
@@ -38,9 +40,11 @@ export class UserEntity extends BaseEntity {
   @Column()
   password!: string;
 
+  @Expose() // Allow phone to pass through if needed later
   @Column({ nullable: true })
   phone?: string;
 
+  @Expose() // 👈 CRITICAL: Unlocks the profile image paths
   @Column({ name: 'profile_image', nullable: true })
   profileImage?: string;
 
@@ -72,8 +76,6 @@ export class UserEntity extends BaseEntity {
   })
   status!: UserStatus;
 
-  // --- FIGMA VIRTUAL FIELDS ---
-  // Added @Expose so these stay visible during serialization
   @Expose()
   verificationStatus?: string;
 
