@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { Module, forwardRef } from '@nestjs/common';
+=======
+import { Module, forwardRef } from '@nestjs/common'; // Added forwardRef
+>>>>>>> 7dda4b8 (feat: update admin controllers, admin module,admin.service, and entity for identity verification, service and also user.entity)
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserEntity } from '@/users/entity/user.entity';
 import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
