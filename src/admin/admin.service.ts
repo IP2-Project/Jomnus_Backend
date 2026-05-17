@@ -1,17 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { UserEntity } from '@/users/entity/user.entity';
 import {
   TaskAssignmentEntity,
   AssignmentStatus,
 } from '@/assignments/entities/assignment.entity';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
-import {
-  IdentityVerificationEntity,
-  VerificationStatus,
-} from '@/identity-verifications/entities/identity-verification.entity';
+import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
+import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.entity'; 
 import { InjectRepository } from '@nestjs/typeorm';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { Repository } from 'typeorm';
+import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 
 @Injectable()
 export class adminServices {
@@ -26,15 +25,24 @@ export class adminServices {
     private readonly verificationStatusRepository: Repository<IdentityVerificationEntity>,
     @InjectRepository(TaskEntity)
     private readonly taskRepository: Repository<TaskEntity>,
+    
+    @InjectRepository(AuditLogEntity)
+    private readonly auditLogRepository: Repository<AuditLogEntity>,
+    
+    @Inject(forwardRef(() => IdentityVerificationsService))
+    private readonly identityVerificationsService: IdentityVerificationsService,
   ) {}
 
+  // ============ USER MANAGEMENT ============
   async deleteUser(id: number) {
     return await this.UserRepository.delete(id);
   }
+  
   async getAllUser() {
     return await this.UserRepository.find();
   }
 
+  // ============ TASK MANAGEMENT ============
   async getAllTasks() {
     const tasks = await this.taskRepository.find({
       relations: ['requester'],
@@ -62,12 +70,14 @@ export class adminServices {
     return await this.taskRepository.findOne({ where: { id, title } });
   }
 
+  // ============ APPLICATIONS MANAGEMENT ============
   async getAllTaskApplications(id: number) {
     return await this.applicationRepository.find({
       where: { task_id: id },
     });
   }
 
+  // ============ ASSIGNMENTS MANAGEMENT ============
   async getAllTaskCompletions(id: number) {
     return await this.assignmentRepository.find({
       where: { status: AssignmentStatus.COMPLETED, task_id: id },
@@ -84,19 +94,33 @@ export class adminServices {
     });
   }
 
-  async verifyIdentity(id: number) {
-    const verification = await this.verificationStatusRepository.findOne({
-      where: { id },
-      relations: ['user'],
+  // ============ IDENTITY VERIFICATION METHODS ============
+
+  async verifyIdentity(id: number, adminId: number) {
+    // Delegates to the main service to reuse transactional state handling, notifications, and strict document checks
+    return await this.identityVerificationsService.review(id, adminId, {
+      status: 'APPROVED' as any,
     });
-    if (verification) {
-      verification.status = VerificationStatus.APPROVED;
-      await this.verificationStatusRepository.save(verification);
-      const user = verification.user;
-      user.isIdentityVerified = true;
-      await this.UserRepository.save(user);
-    }
   }
+
+  async rejectIdentity(id: number, reason: string, adminId: number) {
+    return await this.identityVerificationsService.review(id, adminId, {
+      status: 'REJECTED' as any,
+      rejection_reason: reason || 'No reason provided',
+    });
+  }
+
+  async resetToPending(id: number, adminId: number) {
+    return await this.identityVerificationsService.resetToPending(id, adminId);
+  }
+
+  // ============ CSV EXPORT METHOD ============
+  async exportVerificationsToCsv(): Promise<string> {
+    // Uses structural parsing routines with lowercase v.user.fullName tracking checks
+    return await this.identityVerificationsService.exportToCsv();
+  }
+
+  // ============ PAGINATION METHODS ============
 
   async paginateUsers(page: number, limit: number) {
     const [users, total] = await this.UserRepository.findAndCount({
@@ -112,17 +136,8 @@ export class adminServices {
   }
 
   async paginateVerificationStatus(page: number, limit: number) {
-    const [verifications, total] =
-      await this.verificationStatusRepository.findAndCount({
-        skip: (page - 1) * limit,
-        take: limit,
-      });
-    return {
-      data: verifications,
-      total,
-      page,
-      last_page: Math.ceil(total / limit),
-    };
+    // Pulls from getPaginatedList to properly build URLs with process.env.APP_URL formatting
+    return await this.identityVerificationsService.getPaginatedList(page, limit, '', 'ALL');
   }
 
   async paginateAssignments(page: number, limit: number) {
@@ -149,12 +164,10 @@ export class adminServices {
   }
 
   async paginateApplications(page: number, limit: number) {
-    const [applications, total] = await this.applicationRepository.findAndCount(
-      {
-        skip: (page - 1) * limit,
-        take: limit,
-      },
-    );
+    const [applications, total] = await this.applicationRepository.findAndCount({
+      skip: (page - 1) * limit,
+      take: limit,
+    });
     return {
       data: applications,
       total,

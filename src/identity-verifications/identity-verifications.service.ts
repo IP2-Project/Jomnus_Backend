@@ -169,7 +169,7 @@ async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
 /**
    * Admin Review (Approve/Reject)
    */
-async review(id: number, adminId: number, dto: ReviewVerificationDto) {
+  async review(id: number, adminId: number, dto: ReviewVerificationDto) {
     const admin = await this.userRepo.findOne({ where: { id: adminId } });
     if (!admin) throw new ForbiddenException('Invalid Admin performing review.');
 
@@ -182,9 +182,13 @@ async review(id: number, adminId: number, dto: ReviewVerificationDto) {
       if (!verification) throw new NotFoundException('Request not found');
       if (!verification.user) throw new BadRequestException('No user linked.');
 
+      // --- UPDATED STRICT VALIDATION CHECK ---
       if (dto.status === VerificationStatus.APPROVED) {
-        if (!verification.id_card_url || !verification.selfie_url) {
-          throw new BadRequestException('Cannot approve: Identity documents (ID or Selfie) are missing.');
+        const isCardMissing = !verification.id_card_url || verification.id_card_url.trim() === '';
+        const isSelfieMissing = !verification.selfie_url || verification.selfie_url.trim() === '';
+
+        if (isCardMissing || isSelfieMissing) {
+          throw new BadRequestException('Cannot approve: Identity documents (ID or Selfie) are empty or invalid.');
         }
       }
 
@@ -211,7 +215,7 @@ async review(id: number, adminId: number, dto: ReviewVerificationDto) {
         currentRole: isApproved ? UserRole.PERFORMER : UserRole.REQUESTER
       });
 
-      // Update the local object so Postman shows the new data immediately
+      // Update the local object so UI updates immediately
       verification.user.isIdentityVerified = isApproved;
       verification.user.isPerformer = isApproved;
       verification.user.currentRole = isApproved ? UserRole.PERFORMER : UserRole.REQUESTER;
@@ -407,14 +411,19 @@ async exportToCsv() {
   const header = 'ID,Full Name,Email,Status,Rejection Reason,Reviewed By,Reviewed At,Created At\n';
   
   const rows = data.map(v => {
-    // Sanitize fields by replacing double quotes and wrapping in quotes
+    // 1. Casing fixed to lowercase 'n' to match UserEntity property
     const fullName = `"${(v.user?.fullName || '').replace(/"/g, '""')}"`;
     const email = `"${v.user?.email || ''}"`;
     const reason = `"${(v.rejection_reason || '').replace(/"/g, '""')}"`;
-    const reviewerName = `"${(v.reviewer?.fullName || 'N/A').replace(/"/g, '""')}"`;
-    const reviewDate = v.reviewed_at ? v.reviewed_at.toISOString() : 'N/A';
     
-    return `${v.id},${fullName},${email},${v.status},${reason},${reviewerName},${reviewDate},${v.created_at?.toISOString()}`;
+    // 2. Casing fixed for reviewer as well
+    const reviewerName = `"${(v.reviewer?.fullName || 'N/A').replace(/"/g, '""')}"`;
+    
+    // 3. Keep safe date string fallbacks to avoid application crashes
+    const reviewDate = v.reviewed_at ? v.reviewed_at.toISOString() : 'N/A';
+    const createdAtDate = v.created_at ? v.created_at.toISOString() : 'N/A';
+    
+    return `${v.id},${fullName},${email},${v.status},${reason},${reviewerName},${reviewDate},${createdAtDate}`;
   }).join('\n');
 
   return header + rows;
