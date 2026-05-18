@@ -66,10 +66,6 @@ export class StatsService {
       throw new NotFoundException('Stats not found');
     }
 
-    if (stats.user.currentRole !== 'PERFORMER') {
-      throw new ForbiddenException('User is not currently a Performer');
-    }
-
     return stats;
   }
 
@@ -82,10 +78,6 @@ export class StatsService {
     if (!stats) {
       await this.validateUser(userId);
       throw new NotFoundException('Requester statistics not found');
-    }
-
-    if (stats.user.currentRole !== 'REQUESTER') {
-      throw new ForbiddenException('User is not currently a Requester');
     }
 
     return stats;
