@@ -36,7 +36,22 @@ export class adminServices {
   }
 
   async getAllTasks() {
-    return await this.taskRepository.find();
+    const tasks = await this.taskRepository.find({
+      relations: ['requester'],
+      order: { created_at: 'DESC' },
+    });
+
+    return tasks.map((task) => ({
+      ...task,
+      requester: task.requester
+          ? {
+            id: task.requester.id,
+            fullName: task.requester.fullName,
+            email: task.requester.email,
+            profileImage: task.requester.profileImage,
+          }
+          : null,
+    }));
   }
 
   async deleteTask(id: number) {
@@ -114,9 +129,19 @@ export class adminServices {
     const [assignments, total] = await this.assignmentRepository.findAndCount({
       skip: (page - 1) * limit,
       take: limit,
+      relations: ['task', 'performer'],
     });
+
     return {
-      data: assignments,
+      data: assignments.map((a) => ({
+        ...a,
+        task: a.task ? { id: a.task.id, title: a.task.title } : null,
+        performer: a.performer ? {
+          id: a.performer.id,
+          fullName: a.performer.fullName,
+          email: a.performer.email,
+        } : null,
+      })),
       total,
       page,
       last_page: Math.ceil(total / limit),
