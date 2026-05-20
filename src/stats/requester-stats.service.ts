@@ -2,65 +2,74 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { RequesterStats } from "./entities/requester-stats.entity";
-import { UserEntity } from "@/users/entity/user.entity";
 
 @Injectable()
 export class RequesterStatsService {
   constructor(
     @InjectRepository(RequesterStats)
-    private readonly requesterRepo: Repository<RequesterStats>,
+    private readonly repo: Repository<RequesterStats>,
   ) {}
 
-  // 🟢 Create stats when user is created
-  async createInitial(user: UserEntity) {
-    const existing = await this.requesterRepo.findOne({
-      where: { user_id: user.id }, // ✅ FIXED (use column, not relation)
+  // 🟢 Ensure stats row exists
+  async ensure(userId: number) {
+    let stats = await this.repo.findOne({
+      where: { user_id: userId },
     });
 
-    if (!existing) {
-      await this.requesterRepo.save(
-        this.requesterRepo.create({
-          user_id: user.id, // ✅ IMPORTANT
+    if (!stats) {
+      stats = await this.repo.save(
+        this.repo.create({
+          user_id: userId,
           tasks_posted: 0,
           tasks_verified: 0,
           total_spent: 0,
         }),
       );
     }
+
+    return stats;
   }
 
-  // 🟢 Get stats for frontend
+  // 🟢 TASK CREATED
+  async incrementTaskPosted(userId: number) {
+    await this.ensure(userId);
+
+    await this.repo.increment(
+      { user_id: userId },
+      "tasks_posted",
+      1,
+    );
+  }
+
+  // 🟢 TASK VERIFIED / COMPLETED
+  async incrementTaskVerified(userId: number) {
+    await this.ensure(userId);
+
+    await this.repo.increment(
+      { user_id: userId },
+      "tasks_verified",
+      1,
+    );
+  }
+
+  // 🟢 TASK PAYMENT (TOTAL SPENT)
+  async addTotalSpent(userId: number, amount: number) {
+    if (!amount || amount <= 0) return;
+
+    await this.ensure(userId);
+
+    await this.repo.increment(
+      { user_id: userId },
+      "total_spent",
+      amount,
+    );
+  }
+
+  // 🟢 GET STATS
   async getByUserId(userId: number) {
-    return this.requesterRepo.findOne({
-      where: { user_id: userId }, // ✅ FIXED
+    return this.repo.findOne({
+      where: { user_id: userId },
       relations: ["user"],
     });
   }
-
-  async incrementTasksPosted(userId: number) {
-  await this.requesterRepo.increment(
-    { user_id: userId },
-    "tasks_posted",
-    1,
-  );
-}
-
-  async incrementVerifiedTasks(userId: number) {
-  await this.requesterRepo.increment(
-    { user_id: userId },
-    "tasks_verified",
-    1,
-  );
-}
-
-  async addSpent(userId: number, amount: number) {
-  if (amount <= 0) return;
-
-  await this.requesterRepo.increment(
-    { user_id: userId },
-    "total_spent",
-    amount,
-  );
-}
-
 }

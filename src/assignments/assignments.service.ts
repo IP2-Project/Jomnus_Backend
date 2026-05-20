@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 import { TaskEntity, TaskStatus } from '@/tasks/entities/task.entity';
+import { PerformerStatsService } from '@/stats/performer-stats.service';
+import { RequesterStatsService } from '@/stats/requester-stats.service';
 
 @Injectable()
 export class AssignmentsService {
@@ -12,7 +14,11 @@ export class AssignmentsService {
         @InjectRepository(TaskAssignmentEntity)
         private assignRepo: Repository<TaskAssignmentEntity>,
         @InjectRepository(TaskEntity)
-        private taskRepo: Repository<TaskEntity>
+        private taskRepo: Repository<TaskEntity>,
+
+        private readonly performerStats: PerformerStatsService,
+        private readonly requesterStats: RequesterStatsService,
+
     ) {}
 
     create(taskId: number, performerId: number,  applicationId: number, price: number) {
@@ -160,6 +166,10 @@ export class AssignmentsService {
         });
 
         await this.refreshTaskStatus(assignment.task_id);
+        // 🔥 ADD STATS UPDATE HERE
+        // await this.performerStats.incrementCompletedTasks(assignment.performer_id);
+
+        await this.requesterStats.incrementTaskVerified(task.requester_id);
 
 
         const allAssignments = await this.assignRepo.find({

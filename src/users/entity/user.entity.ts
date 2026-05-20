@@ -16,6 +16,8 @@ import { RequesterStats } from '@/stats/entities/requester-stats.entity';
 import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { Review } from '@/reviews/entities/review.entity';
+import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
+import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
 
 export enum UserRole {
   REQUESTER = 'REQUESTER',
@@ -137,6 +139,12 @@ export class UserEntity extends BaseEntity {
     (verification) => verification.user,
   )
   identityVerifications!: IdentityVerificationEntity[];
+
+  @OneToMany(() => TaskApplicationEntity, (app) => app.performer)
+  applications!: TaskApplicationEntity[];
+
+  @OneToMany(() => TaskAssignmentEntity, (assignment) => assignment.performer)
+  assignments!: TaskAssignmentEntity[];
 
   @BeforeInsert()
   @BeforeUpdate()

@@ -71,7 +71,7 @@ export class TasksService {
     });
 
      // 🔥 ADD THIS (IMPORTANT)
-    await this.requesterStatsService.incrementTasksPosted(userId);
+    await this.requesterStatsService.incrementTaskPosted(userId);
     await this.performerStatsService.incrementCompletedTasks(userId); 
     
 
