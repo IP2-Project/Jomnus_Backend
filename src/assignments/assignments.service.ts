@@ -131,9 +131,9 @@ export class AssignmentsService {
                 a.status === AssignmentStatus.COMPLETED ||
                 a.status === AssignmentStatus.VERIFIED,
         ).length;
-
-
+        
         return { message: 'Marked as completed' };
+        
     }
 
     async verifyAssignment(id: number, user: UserEntity) {
@@ -166,11 +166,9 @@ export class AssignmentsService {
         });
 
         await this.refreshTaskStatus(assignment.task_id);
-        // 🔥 ADD STATS UPDATE HERE
-        // await this.performerStats.incrementCompletedTasks(assignment.performer_id);
+        
 
-        await this.requesterStats.incrementTaskVerified(task.requester_id);
-
+        console.log(`[verifyAssignment] assignment.id=${id} updated to VERIFIED, performer_id=${assignment.performer_id}, accepted_price=${assignment.accepted_price}`);
 
         const allAssignments = await this.assignRepo.find({
             where: {
@@ -189,6 +187,8 @@ export class AssignmentsService {
         }
 
         return { message: 'Verified successfully' };
+
+        
     }
 
 
@@ -267,6 +267,7 @@ export class AssignmentsService {
         await this.taskRepo.update(taskId, {
             status: TaskStatus.COMPLETED,
         });
-    }
+
+     }
 
 }

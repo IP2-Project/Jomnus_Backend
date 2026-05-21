@@ -1,36 +1,49 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+
 import { RequesterStats } from "./entities/requester-stats.entity";
+import { UserEntity } from "@/users/entity/user.entity";
 
 @Injectable()
 export class RequesterStatsService {
+  updateRequesterStats(requester_id: number) {
+      throw new Error('Method not implemented.');
+  }
   constructor(
     @InjectRepository(RequesterStats)
     private readonly repo: Repository<RequesterStats>,
+
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
   ) {}
 
-  // 🟢 Ensure stats row exists
+  /**
+   * Ensure stats row exists
+   */
   async ensure(userId: number) {
     let stats = await this.repo.findOne({
       where: { user_id: userId },
     });
 
     if (!stats) {
-      stats = await this.repo.save(
-        this.repo.create({
-          user_id: userId,
-          tasks_posted: 0,
-          tasks_verified: 0,
-          total_spent: 0,
-        }),
-      );
+      stats = this.repo.create({
+        user_id: userId,
+
+        tasks_posted: 0,
+        tasks_verified: 0,
+        total_spent: 0,
+      });
+
+      stats = await this.repo.save(stats);
     }
 
     return stats;
   }
 
-  // 🟢 TASK CREATED
+  /**
+   * Increment task posted count
+   */
   async incrementTaskPosted(userId: number) {
     await this.ensure(userId);
 
@@ -41,31 +54,44 @@ export class RequesterStatsService {
     );
   }
 
-  // 🟢 TASK VERIFIED / COMPLETED
-  async incrementTaskVerified(userId: number) {
+  /**
+   * Fully recalculate requester stats
+   */
+  async refresh(userId: number) {
     await this.ensure(userId);
 
-    await this.repo.increment(
-      { user_id: userId },
-      "tasks_verified",
-      1,
+    const result = await this.repo.query(
+      `
+      SELECT
+        COUNT(ta.id)::int AS tasks_verified,
+        COALESCE(SUM(ta.accepted_price), 0)::float AS total_spent
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      WHERE t.requester_id = $1
+        AND ta.status = 'VERIFIED'
+      `,
+      [userId],
     );
+
+    const stats = result[0] || {
+      tasks_verified: 0,
+      total_spent: 0,
+    };
+
+    await this.repo.update(
+      { user_id: userId },
+      {
+        tasks_verified: Number(stats.tasks_verified),
+        total_spent: Number(stats.total_spent),
+      },
+    );
+
+    return stats;
   }
 
-  // 🟢 TASK PAYMENT (TOTAL SPENT)
-  async addTotalSpent(userId: number, amount: number) {
-    if (!amount || amount <= 0) return;
-
-    await this.ensure(userId);
-
-    await this.repo.increment(
-      { user_id: userId },
-      "total_spent",
-      amount,
-    );
-  }
-
-  // 🟢 GET STATS
+  /**
+   * Get requester stats
+   */
   async getByUserId(userId: number) {
     return this.repo.findOne({
       where: { user_id: userId },

@@ -72,7 +72,7 @@ export class TasksService {
 
      // 🔥 ADD THIS (IMPORTANT)
     await this.requesterStatsService.incrementTaskPosted(userId);
-    await this.performerStatsService.incrementCompletedTasks(userId); 
+    // await this.performerStatsService.incrementCompletedTasks(userId); 
     
 
     if (dto.categoryIds?.length) {

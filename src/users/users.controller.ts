@@ -74,10 +74,10 @@ export class UsersController {
       );
     }
   
-    @Get(':id')
-    async findById(@Param('id', ParseIntPipe) id: number) {
-      return this.usersService.findById(id);
-    }
+    // @Get(':id')
+    // async findById(@Param('id', ParseIntPipe) id: number) {
+    //   return this.usersService.findById(id);
+    // }
 
 
 
