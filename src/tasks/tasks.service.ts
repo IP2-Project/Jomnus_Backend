@@ -34,16 +34,16 @@ export class TasksService {
   ) {}
 
   private mapTaskWithRequester(task: TaskEntity, categories?: unknown) {
-    const { requester, ...taskData } = task;
-
     return {
-      ...taskData,
-      requester: requester
-        ? {
-            fullName: requester.fullName,
-            profile_image: requester.profileImage,
+      ...task,
+      requester: task.requester
+          ? {
+            id: task.requester.id,
+            fullName: task.requester.fullName,
+            email: task.requester.email,
+            profileImage: task.requester.profileImage,
           }
-        : undefined,
+          : null,
       ...(categories ? { categories } : {}),
     };
   }
