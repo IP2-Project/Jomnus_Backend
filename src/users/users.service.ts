@@ -164,31 +164,26 @@ async getPaginatedUsers(query: {
 
 async manualVerify(userId: number, adminId: number) {
   return await this.dataSource.transaction(async (manager) => {
-    // 1. Find user including soft-deleted ones to check their true status
+
     const user = await manager.findOne(UserEntity, { 
       where: { id: userId },
-      withDeleted: true, // Crucial to see if they are soft-deleted/banned
+      withDeleted: true, 
       relations: ['identityVerifications'] 
     });
     
     if (!user) throw new NotFoundException('User not found');
 
-    // 2. SAFETY CHECK: Prevent verifying a banned/deleted user
     if (user.status === UserStatus.BANNED || user.deletedAt) {
       throw new BadRequestException(
         'Cannot manually verify a banned user. Please restore the account first if this was an error.'
       );
     }
 
-    // 3. Update User Flags & Role
     user.isIdentityVerified = true;
-    user.isPerformer = true;               
-    user.currentRole = UserRole.PERFORMER; 
     user.status = UserStatus.ACTIVE;
     
     await manager.save(user);
 
-    // 4. Handle Identity Verification Record
     let verification = await manager.findOne(IdentityVerificationEntity, {
       where: { user: { id: userId } }
     });
@@ -200,7 +195,6 @@ async manualVerify(userId: number, adminId: number) {
       verification.reviewed_at = new Date();
       await manager.save(verification);
     } else {
-      // Create a dummy record if they never uploaded anything but admin wants to verify
       const newVerify = manager.create(IdentityVerificationEntity, {
         user: user,
         status: VerificationStatus.APPROVED,
@@ -213,7 +207,6 @@ async manualVerify(userId: number, adminId: number) {
       await manager.save(newVerify);
     }
 
-    // 5. Audit Log for Accountability
     await manager.save(AuditLogEntity, {
       adminId,
       action: 'MANUAL_VERIFICATION',

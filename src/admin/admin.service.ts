@@ -121,65 +121,64 @@ export class adminServices {
     return await this.identityVerificationsService.exportToCsv();
   }
 
-  // ============ PAGINATION METHODS ============
-  async paginateUsers(page: number, limit: number, search?: string, role?: string, status?: string) {
-    const baseCondition: any = {};
+// ============ PAGINATION METHODS ============
+async paginateUsers(page: number, limit: number, search?: string, role?: string, status?: string) {
+  const baseCondition: any = {};
 
-    // 1. Map role filtering constraints safely
-    if (role && role !== 'ALL') {
-      baseCondition.currentRole = role;
-    } else {
-      // If no specific role filter is chosen, hide ADMINs from pagination queries automatically
-      baseCondition.currentRole = Not('ADMIN');
-    }
-
-    // 2. Map status filtering constraints
-    if (status && status !== 'ALL') {
-      baseCondition.status = status.toLowerCase(); 
-    }
-
-    // 3. Build compound search options mapping over structured arrays
-    let finalWhereCondition: any;
-
-    if (search && search.trim() !== '') {
-      const queryPattern = Like(`%${search.trim()}%`);
-      finalWhereCondition = [
-        { ...baseCondition, email: queryPattern },
-        { ...baseCondition, fullName: queryPattern }
-      ];
-    } else {
-      finalWhereCondition = baseCondition;
-    }
-
-    try {
-      const [users, total] = await this.UserRepository.findAndCount({
-        where: finalWhereCondition,
-        withDeleted: true,
-        skip: (page - 1) * limit,
-        take: limit,
-        order: { id: 'DESC' }, 
-      });
-
-      const formattedData = users.map(user => {
-        const isBanned = user.deletedAt !== null || user.status?.toLowerCase() === 'banned';
-        return {
-          ...user,
-          status: isBanned ? 'BANNED' : 'ACTIVE',
-          verificationStatus: user['verificationStatus'] || (user.isIdentityVerified ? 'APPROVED' : 'NONE')
-        };
-      });
-
-      return {
-        data: formattedData,
-        total,
-        page,
-        last_page: Math.ceil(total / limit),
-      };
-    } catch (dbError) {
-      console.error("Database execution failed in paginateUsers:", dbError);
-      throw dbError;
-    }
+  if (role && role !== 'ALL') {
+    baseCondition.currentRole = role;
+  } else {
+    baseCondition.currentRole = Not('ADMIN');
   }
+
+  if (status && status !== 'ALL') {
+    baseCondition.status = status.toLowerCase(); 
+  }
+
+  let finalWhereCondition: any;
+
+  if (search && search.trim() !== '') {
+    const queryPattern = Like(`%${search.trim()}%`);
+    finalWhereCondition = [
+      { ...baseCondition, email: queryPattern },
+      { ...baseCondition, fullName: queryPattern }
+    ];
+  } else {
+    finalWhereCondition = baseCondition;
+  }
+
+  try {
+    const [users, total] = await this.UserRepository.findAndCount({
+      where: finalWhereCondition,
+      withDeleted: true,
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { id: 'DESC' }, 
+    });
+
+    const formattedData = users.map(user => {
+      const isBanned = user.deletedAt !== null || user.status?.toLowerCase() === 'banned';
+      
+      const hasVerifiedFlag = user.isIdentityVerified === true;
+      return {
+        ...user,
+        status: isBanned ? 'BANNED' : 'ACTIVE',
+        // Now safely populates APPROVED instead of defaulting to NONE
+        verificationStatus: user['verificationStatus'] || (hasVerifiedFlag ? 'APPROVED' : 'NONE')
+      };
+    });
+
+    return {
+      data: formattedData,
+      total,
+      page,
+      last_page: Math.ceil(total / limit),
+    };
+  } catch (dbError) {
+    console.error("Database execution failed in paginateUsers:", dbError);
+    throw dbError;
+  }
+}
 
   async paginateVerificationStatus(page: number, limit: number) {
     return await this.identityVerificationsService.getPaginatedList(page, limit, '', 'ALL');
