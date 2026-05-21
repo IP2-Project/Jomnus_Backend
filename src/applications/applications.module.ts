@@ -6,13 +6,15 @@ import { TaskApplicationEntity } from './entities/task-application.entity';
 import { TasksModule } from '@/tasks/tasks.module';
 import { AssignmentsModule } from '@/assignments/assignments.module';
 import { UsersModule } from '@/users/users.module';
+import { NotificationsModule } from '@/notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TaskApplicationEntity]),
     TasksModule,
     AssignmentsModule,
-    UsersModule
+    UsersModule,
+    NotificationsModule
   ],
   controllers: [ApplicationsController],
   providers: [ApplicationsService],
