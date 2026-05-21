@@ -9,6 +9,7 @@ import { TaskStatus } from '@/tasks/entities/task.entity';
 import { AssignmentsService } from '@/assignments/assignments.service';
 import { UsersService } from '@/users/users.service';
 import { UserEntity } from '@/users/entity/user.entity';
+import { NotificationsService } from '@/notifications/notifications.service';
 
 @Injectable()
 export class ApplicationsService {
@@ -17,7 +18,8 @@ export class ApplicationsService {
         private appRepo: Repository<TaskApplicationEntity>,
         private tasksService: TasksService,
         private assignmentsService: AssignmentsService,
-        private userService: UsersService
+        private userService: UsersService,
+        private notificationsService: NotificationsService
     ) {}
 
     async create(dto: CreateApplicationDto, userId: number) {
@@ -73,10 +75,20 @@ export class ApplicationsService {
 
         const saved = await this.appRepo.save(app);
 
-        return this.appRepo.findOne({
+        const applicationWithPerformer = await this.appRepo.findOne({
             where: { id: saved.id },
             relations: ['performer'],
         });
+        
+        if (applicationWithPerformer && applicationWithPerformer.performer) {
+            await this.notificationsService.notifyNewApplicant(
+                task.requester_id, 
+                applicationWithPerformer.performer.fullName, 
+                task.title, 
+                task.id
+            );
+        }
+        return applicationWithPerformer;
     }
 
     async findMine(userId: number) {
@@ -219,6 +231,11 @@ export class ApplicationsService {
             application.performer_id,
             application.id,
             application.offered_price 
+        );
+        await this.notificationsService.notifyApplicationAccepted(
+            application.performer_id, 
+            task.title, 
+            task.id
         );
 
         return { message: 'Application accepted' };
