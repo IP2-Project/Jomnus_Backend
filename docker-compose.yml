@@ -14,7 +14,6 @@ services:
       - ./tsconfig.build.json:/app/tsconfig.build.json:cached
       - ./uploads:/app/uploads:cached
       - ./package.json:/app/package.json:cached
-      - ./package-lock.json:/app/package-lock.json:cached
       - ./node_modules:/app/node_modules
     ports:
       - '3001:3001'

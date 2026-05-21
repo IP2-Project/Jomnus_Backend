@@ -3,6 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Jo
 
 export enum ProofType {
   IMAGE = 'IMAGE',
+  FILE = 'FILE',
   TEXT = 'TEXT',
   RECEIPT = 'RECEIPT',
   LOCATION = 'LOCATION',

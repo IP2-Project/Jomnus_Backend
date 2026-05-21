@@ -41,18 +41,21 @@ export class adminServices {
   }
 
   async getAllTasks() {
-    const tasks = await this.taskRepository.find({ relations: ['requester'] });
-    
-    // Enrich tasks with worker capacity info
-    return Promise.all(tasks.map(async (task) => {
-      const acceptedCount = await this.applicationRepository.count({
-        where: { task_id: task.id, status: ApplicationStatus.ACCEPTED }
-      });
-      return {
-        ...task,
-        acceptedWorkers: acceptedCount,
-        isFull: acceptedCount >= task.required_workers
-      };
+    const tasks = await this.taskRepository.find({
+      relations: ['requester'],
+      order: { created_at: 'DESC' },
+    });
+
+    return tasks.map((task) => ({
+      ...task,
+      requester: task.requester
+        ? {
+            id: task.requester.id,
+            fullName: task.requester.fullName,
+            email: task.requester.email,
+            profileImage: task.requester.profileImage,
+          }
+        : null,
     }));
   }
 
@@ -61,21 +64,21 @@ export class adminServices {
   }
 
   async findTaskById(id: number, title: string) {
-    const task = await this.taskRepository.findOne({ 
+    const task = await this.taskRepository.findOne({
       where: { id }, // Removed title from where to make it more flexible
-      relations: ['requester'] 
+      relations: ['requester'],
     });
-    
+
     if (!task) return null;
 
     const acceptedCount = await this.applicationRepository.count({
-      where: { task_id: task.id, status: ApplicationStatus.ACCEPTED }
+      where: { task_id: task.id, status: ApplicationStatus.ACCEPTED },
     });
 
     return {
       ...task,
       acceptedWorkers: acceptedCount,
-      isFull: acceptedCount >= task.required_workers
+      isFull: acceptedCount >= task.required_workers,
     };
   }
 
@@ -138,9 +141,21 @@ export class adminServices {
     const [assignments, total] = await this.assignmentRepository.findAndCount({
       skip: (page - 1) * limit,
       take: limit,
+      relations: ['task', 'performer'],
     });
+
     return {
-      data: assignments,
+      data: assignments.map((a) => ({
+        ...a,
+        task: a.task ? { id: a.task.id, title: a.task.title } : null,
+        performer: a.performer
+          ? {
+              id: a.performer.id,
+              fullName: a.performer.fullName,
+              email: a.performer.email,
+            }
+          : null,
+      })),
       total,
       page,
       last_page: Math.ceil(total / limit),

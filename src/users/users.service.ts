@@ -15,6 +15,7 @@ import { IdentityVerificationEntity, VerificationStatus } from '@/identity-verif
 import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.entity';
 import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 import { plainToInstance } from 'class-transformer';
+import { SwitchRoleDto } from './dto/switch-role.dto';
 
 @Injectable()
 export class UsersService {
@@ -414,9 +415,51 @@ async BanUser(id: number, adminId: number) {
       await this.usersRepository.save(user);
     }
   }
+  
+//USER
+  // Add UpdateUserDto to your imports at the top
+// import { UpdateUserDto } from './dto/update-user.dto'; 
 
-  async update(id: number, data: Partial<UserEntity>): Promise<UserEntity> {
-    await this.usersRepository.update(id, data);
-    return this.usersRepository.findOneOrFail({ where: { id } });
+async updateMe(userId: number, updateUserDto: any) {
+  const user = await this.usersRepository.findOne({ where: { id: userId } });
+
+  if (!user) {
+    throw new NotFoundException('User not found');
   }
+
+  // Define which fields are allowed to be updated by the user themselves
+  const allowedUpdates = [
+    'fullName', 
+    'phone', 
+    'bio', 
+    'city', 
+    'country', 
+    'profileImage'
+  ];
+
+  // Merge only allowed fields into the user entity
+  Object.keys(updateUserDto).forEach((key) => {
+    if (allowedUpdates.includes(key)) {
+      user[key] = updateUserDto[key];
+    }
+  });
+
+  return await this.usersRepository.save(user);
+}
+
+async switchUserRole(userId: number, switchRoleDto: SwitchRoleDto) {
+  const user = await this.usersRepository.findOne({ where: { id: userId } });
+  if (!user) throw new NotFoundException('User not found');
+
+  // Business Logic: If switching to PERFORMER, check verification
+  // if (switchRoleDto.role === UserRole.PERFORMER && !user.isIdentityVerified) {
+  //   throw new BadRequestException('You must complete identity verification to enter Performer mode.');
+  // }
+
+  user.currentRole = switchRoleDto.role;
+  user.isPerformer = (switchRoleDto.role === UserRole.PERFORMER);
+
+  return await this.usersRepository.save(user);
+}
+  
 }

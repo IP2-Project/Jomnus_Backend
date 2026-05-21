@@ -21,24 +21,15 @@ export class ApplicationsService {
     ) {}
 
     async create(dto: CreateApplicationDto, userId: number) {
-        const existing = await this.appRepo.findOne({
-            where: {
-                task_id: dto.taskId,
-                performer_id: userId,
-            },
-        });
-
-        if (existing) {
-            throw new BadRequestException('You already applied');
-        }
-
         const task = await this.tasksService.findOne(dto.taskId);
 
         if (!task) {
             throw new NotFoundException('Task not found');
         }
 
-        if (task.status !== TaskStatus.POSTED) {
+        if (
+            task.status !== TaskStatus.POSTED
+        ) {
             throw new BadRequestException(
                 'Task is no longer accepting applications'
             );
@@ -61,6 +52,17 @@ export class ApplicationsService {
             throw new BadRequestException(
                 'Cannot apply to your own task'
             );
+        }
+
+        const existing = await this.appRepo.findOne({
+            where: {
+                task_id: dto.taskId,
+                performer_id: userId,
+            },
+        });
+
+        if (existing) {
+            throw new BadRequestException('You already applied');
         }
 
         const app = this.appRepo.create({
@@ -191,7 +193,9 @@ export class ApplicationsService {
             throw new BadRequestException('Already rejected');
         }
 
-        if (task.status !== TaskStatus.POSTED) {
+        if (
+            task.status !== TaskStatus.POSTED
+        ) {
             throw new BadRequestException('Task not accepting applications');
         }
 
@@ -217,25 +221,40 @@ export class ApplicationsService {
             application.offered_price 
         );
 
-        const requester = await this.userService.findById(task.requester_id);
+        return { message: 'Application accepted' };
+    }
 
-        if (acceptedCount + 1 >= task.required_workers) {
-            await this.appRepo
-            .createQueryBuilder()
-            .update()
-            .set({ status: ApplicationStatus.REJECTED })
-            .where('task_id = :taskId', { taskId: task.id })
-            .andWhere('status = :status', { status: ApplicationStatus.PENDING })
-            .execute();
+    async rejectPendingByTask(taskId: number, user: UserEntity) {
+        const task = await this.tasksService.findOne(taskId);
 
-            await this.tasksService.update(
-            task.id,
-            { status: TaskStatus.IN_PROGRESS },
-            requester!,
+        if (!task) throw new NotFoundException('Task not found');
+
+        if (task.requester_id !== user.id) {
+            throw new ForbiddenException();
+        }
+
+        const acceptedCount = await this.appRepo.count({
+            where: {
+                task_id: taskId,
+                status: ApplicationStatus.ACCEPTED,
+            },
+        });
+
+        if (acceptedCount < task.required_workers) {
+            throw new BadRequestException(
+                'Accept all required workers before closing applications',
             );
         }
 
-        return { message: 'Application accepted' };
+        await this.appRepo
+            .createQueryBuilder()
+            .update()
+            .set({ status: ApplicationStatus.REJECTED })
+            .where('task_id = :taskId', { taskId })
+            .andWhere('status = :status', { status: ApplicationStatus.PENDING })
+            .execute();
+
+        return { message: 'Remaining applications rejected' };
     }
 
 }

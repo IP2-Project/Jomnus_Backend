@@ -33,6 +33,10 @@ export class CreateTaskDto {
   @IsNumber()
   price!: number;
 
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
   @IsDateString()
   deadline!: string;
 
