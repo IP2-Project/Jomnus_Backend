@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
-
+import { UserEntity } from '../users/entity/user.entity';
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepo: Repository<Notification>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
   ) {}
 
   // --- GENERIC METHOD (Prevents Merge Conflicts) ---
@@ -25,6 +27,22 @@ export class NotificationsService {
       task_id: taskId ?? null,
     });
     return this.notificationRepo.save(notification);
+  }
+
+  async broadcastToAll(title: string, message: string) {
+    const users = await this.userRepo.find({ select: ['id'] });
+
+    const notifications = users.map((u) => {
+      return this.notificationRepo.create({
+        user_id: u.id,
+        audience: 'user',
+        title: title,
+        message: message,
+      });
+    });
+
+    await this.notificationRepo.save(notifications);
+    return { success: true, count: notifications.length };
   }
 
   async notifyApplicationAccepted(performerId: number, taskTitle: string, taskId: number) {
