@@ -51,34 +51,34 @@ async getPaginatedUsers(query: {
   const { page = 1, limit = 10, role, status, search, pendingOnly, verified } = query;
   const skip = (page - 1) * limit;
 
-  // Initialize query builder
-  const queryBuilder = this.usersRepository.createQueryBuilder('user');
+  // Initialize query builder and load identity verification requests link
+  const queryBuilder = this.usersRepository.createQueryBuilder('user')
+    .leftJoinAndSelect('user.identityVerifications', 'verification'); // 👈 FIXED: Automatically join relations data array logs
 
-  // 1. STATUS FILTER (Matches Figma Tabs)
+  // 1. STATUS FILTER
   if (status === 'BANNED') {
-    // We must include soft-deleted records to see 'Banned' users
     queryBuilder
       .withDeleted() 
-      .where('user.deletedAt IS NOT NULL');
+      .where('(user.deletedAt IS NOT NULL OR user.status = :bStatus)', { bStatus: UserStatus.BANNED });
+  } else if (status === 'ACTIVE') {
+    queryBuilder
+      .where('user.deletedAt IS NULL')
+      .andWhere('user.status = :aStatus', { aStatus: UserStatus.ACTIVE });
   } else {
-    // Default to ACTIVE: TypeORM handles 'deletedAt IS NULL' automatically 
-    // unless withDeleted() is called.
-    queryBuilder.where('user.deletedAt IS NULL');
+    queryBuilder.withDeleted();
   }
 
   // 2. PENDING FILTER
   if (pendingOnly === 'true') {
-    queryBuilder
-      .innerJoin('user.identityVerifications', 'verification')
-      .andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
+    queryBuilder.andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
   }
 
-  // 3. ROLE FILTER (e.g., ADMIN, PERFORMER, REQUESTER)
+  // 3. ROLE FILTER
   if (role && role !== 'ALL') {
-    queryBuilder.andWhere('user.currentRole = :role', { role });
+    queryBuilder.andWhere('user.currentRole = :role', { role: role.toUpperCase() });
   }
 
-  // 4. VERIFIED FILTER (Missing in your snippet, but in Figma)
+  // 4. VERIFIED FILTER
   if (verified === 'true') {
     queryBuilder.andWhere('(user.isVerified = true OR user.isIdentityVerified = true)');
   }
@@ -97,20 +97,23 @@ async getPaginatedUsers(query: {
     .take(limit)
     .getManyAndCount();
 
-  // 6. DATA MAPPING (Matches Figma Labels)
-    const data = users.map(user => {
-      let vLabel = 'No';
-      if (user.currentRole === UserRole.ADMIN) {
-        vLabel = 'Internal';
-      } else if (user.isVerified || user.isIdentityVerified) {
-        vLabel = 'Yes';
-      }
+  // 6. FIXED DATA MAPPING
+  const data = users.map(user => {
+    // 👈 FIXED: Read the real validation loop to fetch exact text string ('PENDING', 'APPROVED', or 'NONE')
+    const latestRequest = user.identityVerifications && user.identityVerifications.length > 0
+      ? user.identityVerifications[user.identityVerifications.length - 1]
+      : null;
+
+    const currentQueueStatus = latestRequest ? latestRequest.status : 'NONE';
+
+    const isAccountBanned = user.deletedAt !== null || user.status === UserStatus.BANNED;
 
     return {
-        ...user,
-        verificationStatus: vLabel,
-        displayStatus: user.deletedAt ? 'Banned' : 'Active'
-      };
+      ...user,
+      verificationStatus: currentQueueStatus, // 👈 Passes exactly what the queue holds ('PENDING' for Sak and Nak)
+      displayStatus: isAccountBanned ? 'Banned' : 'Active',
+      status: isAccountBanned ? UserStatus.BANNED : UserStatus.ACTIVE 
+    };
   });
 
   return {
