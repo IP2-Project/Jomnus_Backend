@@ -71,8 +71,8 @@ export class TasksService {
     });
 
      // 🔥 ADD THIS (IMPORTANT)
-    await this.requesterStatsService.incrementTasksPosted(userId);
-    await this.performerStatsService.incrementCompletedTasks(userId); 
+    await this.requesterStatsService.incrementTaskPosted(userId);
+    // await this.performerStatsService.incrementCompletedTasks(userId); 
     
 
     if (dto.categoryIds?.length) {
