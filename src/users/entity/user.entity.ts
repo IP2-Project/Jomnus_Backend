@@ -16,11 +16,8 @@ import { RequesterStats } from '@/stats/entities/requester-stats.entity';
 import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { Review } from '@/reviews/entities/review.entity';
-<<<<<<< HEAD
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
-=======
->>>>>>> 4f67070e20e605ad7a8a7d08ad804e51ae3678c1
 
 export enum UserRole {
   REQUESTER = 'REQUESTER',
