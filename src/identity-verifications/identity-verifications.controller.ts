@@ -103,7 +103,7 @@ export class IdentityVerificationsController {
     return this.service.create(userId, dto);
   }
 
-  // --- REVIEW FLOW ---
+// --- REVIEW FLOW ---
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/review')
@@ -123,12 +123,21 @@ export class IdentityVerificationsController {
    */
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reset')
-  async reset(@Param('id', ParseIntPipe) id: number, @Request() req) {
+  async reset(
+    @Param('id', ParseIntPipe) id: number, 
+    @Body() body: { reason?: string }, // 👈 1. Grab the reason object from the request body
+    @Request() req
+  ) {
     this.checkAdmin(req);
     const adminId = this.getUserId(req);
-    return this.service.resetToPending(id, adminId);
+    
+    // 👈 2. Extract the string and fall back to a default if it's empty
+    const reasonText = body?.reason?.trim() || "Admin initiated reset to pending";
+    
+    // 👈 3. Pass the 3rd argument to resolve the TS2554 compilation error
+    return this.service.resetToPending(id, adminId, reasonText);
   }
-
+  
   /**
    * Logic Test 2: Clear Images
    * Moves files to archive and resets image paths

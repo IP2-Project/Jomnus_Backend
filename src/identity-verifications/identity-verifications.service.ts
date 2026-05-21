@@ -207,19 +207,23 @@ async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
       
       await manager.save(verification);
 
-      // --- SYNC START ---
-      // Update the database directly
-      await manager.update(UserEntity, verification.user.id, {
-        isIdentityVerified: isApproved,
-        isPerformer: isApproved,
-        currentRole: isApproved ? UserRole.PERFORMER : UserRole.REQUESTER
-      });
+      // --- NEW BULLETPROOF SYNC SEGMENT ---
+      // 1. Fetch the user profile safely inside the transaction block
+      const targetUser = await manager.findOne(UserEntity, { where: { id: verification.user.id } });
 
-      // Update the local object so UI updates immediately
-      verification.user.isIdentityVerified = isApproved;
-      verification.user.isPerformer = isApproved;
-      verification.user.currentRole = isApproved ? UserRole.PERFORMER : UserRole.REQUESTER;
-      // --- SYNC END ---
+      if (targetUser) {
+        // 2. Map properties cleanly using camelCase code definitions
+        targetUser.isIdentityVerified = isApproved;
+        targetUser.isPerformer = isApproved;
+        targetUser.currentRole = isApproved ? UserRole.PERFORMER : UserRole.REQUESTER;
+        
+        // 3. Force database state persistence synchronization back to postgres
+        await manager.save(targetUser);
+
+        // 4. Update the local relational object tree for real-time response accuracy
+        verification.user = targetUser;
+      }
+      // --- END OF SYNC SEGMENT ---
 
       await manager.save(AuditLogEntity, {
         action: dto.status,
@@ -243,11 +247,11 @@ async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
     await this.broadcastStats(); 
     return result;
   }
-
-  /**
+  
+/**
    * Resets a record to Pending (Rollback)
    */
-async resetToPending(id: number, adminId: number) {
+  async resetToPending(id: number, adminId: number, reason: string) { // ✅ Added reason parameter
     const verification = await this.verificationRepo.findOne({ 
       where: { id },
       relations: ['user'] 
@@ -267,14 +271,14 @@ async resetToPending(id: number, adminId: number) {
       // --- SYNC END ---
       
       verification.status = VerificationStatus.PENDING;
-      verification.rejection_reason = null;
+      verification.rejection_reason = reason || 'Admin manually reset verification to pending.'; // ✅ Replaced 'null' with actual provided reason text
       verification.reviewed_at = undefined; // Clears the TS 'null' error
       verification.reviewed_by = undefined; // Clears the TS 'null' error
       await manager.save(verification);
 
       await manager.save(AuditLogEntity, {
         action: 'RESET_TO_PENDING',
-        reason: 'Admin manually reset verification to pending.',
+        reason: reason || 'Admin manually reset verification to pending.', // ✅ Tracked reason parameter in Audit Trail logs
         targetUserId: verification.user.id,
         adminId: adminId,
       });
@@ -283,7 +287,7 @@ async resetToPending(id: number, adminId: number) {
         user_id: verification.user.id,
         audience: 'user',
         title: 'Verification Reset',
-        message: 'Your identity verification has been reset to pending for re-review.',
+        message: `Your identity verification has been reset to pending for re-review. Reason: ${reason || 'Manual review required.'}`, // ✅ Provided context inside notifications engine
         type: 'INFO_UPDATE', 
       });
     });
@@ -351,7 +355,7 @@ async clearVerificationImages(userId: number, adminId: number) {
   });
 }
 
-  /**
+/**
    * Paginated List
    */
   async getPaginatedList(page: number, limit: number, search?: string, status?: string) {
@@ -361,13 +365,18 @@ async clearVerificationImages(userId: number, adminId: number) {
     const queryBuilder = this.verificationRepo.createQueryBuilder('verification')
       .leftJoinAndSelect('verification.user', 'user') 
       .leftJoinAndSelect('verification.reviewer', 'reviewer')
-      .where('1=1');
+      .where('1=1')
+      
+      // 🌟 ADD THIS FILTER CONDITION HERE:
+      // Excludes users whose role is 'ADMIN' from showing up in the queue list entirely
+      .andWhere('user.currentRole != :adminRole', { adminRole: UserRole.ADMIN });
 
     if (status && status.toUpperCase() !== 'ALL') {
       const upperStatus = status.toUpperCase();
       queryBuilder.andWhere('verification.status = :status', { status: upperStatus });
     }
 
+    // ... Rest of your existing getPaginatedList code remains exactly the same!
     if (search && search.trim() !== '') {
       const searchPattern = `%${search.trim()}%`;
       queryBuilder.andWhere(
