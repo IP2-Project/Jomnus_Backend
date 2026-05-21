@@ -214,8 +214,8 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get(':id')
-  async findById(@Param('id', ParseIntPipe) id: number, @Request() req) {
+  @Get('admin/:id')
+  async findUserAdmin(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
     return this.usersService.findById(id);
   }

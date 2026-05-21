@@ -13,12 +13,18 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoriesService } from '@/categories/categories.service';
 import { UserEntity, UserRole } from '@/users/entity/user.entity';
+<<<<<<< HEAD
 import {
   ApplicationStatus,
   TaskApplicationEntity,
 } from '@/applications/entities/task-application.entity';
 import { RequesterStatsService } from '@/stats/requester-stats.service';
 import { PerformerStatsService } from '@/stats/performer-stats.service';
+=======
+import { RequesterStatsService } from '@/stats/requester-stats.service';
+import { PerformerStatsService } from '@/stats/performer-stats.service';
+import { ApplicationStatus, TaskApplicationEntity } from '@/applications/entities/task-application.entity';
+>>>>>>> 4f67070e20e605ad7a8a7d08ad804e51ae3678c1
 
 @Injectable()
 export class TasksService {
@@ -41,6 +47,7 @@ export class TasksService {
 
   private mapTaskWithRequester(task: TaskEntity, categories?: unknown) {
     return {
+<<<<<<< HEAD
       ...task,
       requester: task.requester
           ? {
@@ -48,6 +55,14 @@ export class TasksService {
             fullName: task.requester.fullName,
             email: task.requester.email,
             profileImage: task.requester.profileImage,
+=======
+      ...taskData,
+      requester: requester
+        ? {
+            id: requester.id,
+            fullName: requester.fullName,
+            profile_image: requester.profileImage,
+>>>>>>> 4f67070e20e605ad7a8a7d08ad804e51ae3678c1
           }
           : null,
       ...(categories ? { categories } : {}),
@@ -71,8 +86,13 @@ export class TasksService {
     });
 
      // 🔥 ADD THIS (IMPORTANT)
+<<<<<<< HEAD
     await this.requesterStatsService.incrementTaskPosted(userId);
     // await this.performerStatsService.incrementCompletedTasks(userId); 
+=======
+    await this.requesterStatsService.incrementTasksPosted(userId);
+    await this.performerStatsService.incrementCompletedTasks(userId); 
+>>>>>>> 4f67070e20e605ad7a8a7d08ad804e51ae3678c1
     
 
     if (dto.categoryIds?.length) {
