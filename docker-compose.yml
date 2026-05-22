@@ -34,6 +34,10 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
       - CORS_ORIGINS=${CORS_ORIGINS}
+      # 👇 CLOUDINARY CONFIGURATION PASSTHROUGH 👇
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
     command: npm run start:dev
     restart: unless-stopped
     depends_on:
@@ -53,6 +57,8 @@ services:
 
   db:
     image: postgres:15-alpine
+    env_file:
+      - .env
     environment:
       - POSTGRES_USER=${DB_USERNAME}
       - POSTGRES_PASSWORD=${DB_PASSWORD}

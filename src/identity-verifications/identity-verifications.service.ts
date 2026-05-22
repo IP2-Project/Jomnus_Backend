@@ -1,3 +1,455 @@
+// import { 
+//   Injectable, 
+//   NotFoundException, 
+//   BadRequestException, 
+//   ForbiddenException,
+//   Logger,
+//   Inject,     
+//   forwardRef  
+// } from '@nestjs/common';
+// import { InjectRepository } from '@nestjs/typeorm';
+// import { Repository, MoreThanOrEqual, DataSource, In, Brackets } from 'typeorm';
+// import { IdentityVerificationEntity, VerificationStatus } from './entities/identity-verification.entity';
+// import { AuditLogEntity } from './entities/audit-log.entity';
+// import { UserEntity, UserRole } from '@/users/entity/user.entity';
+// import { ReviewVerificationDto } from './dto/review-verification.dto';
+// import { NotificationsService } from '../notifications/notifications.service';
+// import { IdentityGateway } from './identity.gateway'; 
+// import { UsersService } from '@/users/users.service';
+// import * as fs from 'fs/promises'; 
+// import * as path from 'path';
+
+// @Injectable()
+// export class IdentityVerificationsService {
+//   private readonly logger = new Logger(IdentityVerificationsService.name);
+
+//   constructor(
+//     @InjectRepository(IdentityVerificationEntity)
+//     private readonly verificationRepo: Repository<IdentityVerificationEntity>,
+//     @InjectRepository(UserEntity)
+//     private readonly userRepo: Repository<UserEntity>,
+//     @InjectRepository(AuditLogEntity)
+//     private readonly auditLogRepo: Repository<AuditLogEntity>,
+//     private readonly notificationsService: NotificationsService,
+//     private readonly dataSource: DataSource,
+//     private readonly gateway: IdentityGateway,
+
+//     @Inject(forwardRef(() => UsersService))
+//     private readonly usersService: UsersService, 
+//   ) {}
+
+//   /**
+//    * Updates real-time dashboard stats via WebSockets
+//    */
+//   private async broadcastStats() {
+//     try {
+//       const stats = await this.getAdminStats();
+//       this.gateway.emitStatsUpdate(stats);
+//     } catch (error) {
+//       this.logger.error('Failed to broadcast real-time stats', error);
+//     }
+//   }
+
+//   /**
+//    * Fetches counts and activity for the Admin Dashboard
+//    */
+//   async getAdminStats() {
+//     const totalPending = await this.verificationRepo.count({
+//       where: { status: VerificationStatus.PENDING },
+//     });
+
+//     const now = new Date();
+//     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+//     const processedToday = await this.verificationRepo.count({
+//       where: { 
+//         status: In([VerificationStatus.APPROVED, VerificationStatus.REJECTED]),
+//         reviewed_at: MoreThanOrEqual(startOfToday) 
+//       },
+//     });
+
+//     const processedTodayDetails = await this.verificationRepo.find({
+//       where: { reviewed_at: MoreThanOrEqual(startOfToday) },
+//       relations: ['user'],
+//       take: 6,
+//     });
+
+//     const processedAvatars = processedTodayDetails.map(v => {
+//       if (v.user?.profileImage) return v.user.profileImage;
+//       const name = v.user?.fullName || 'User';
+//       return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`;
+//     });
+
+//     const recentActivity = await this.auditLogRepo.find({
+//       order: { createdAt: 'DESC' },
+//       take: 5, 
+//       relations: ['admin', 'targetUser'],
+//     });
+
+//     return { totalPending, processedToday, processedAvatars, recentActivity };
+//   }
+
+//   /**
+//    * Handles user submission of identity documents
+//    */
+//   async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
+//     const user = await this.userRepo.findOne({ where: { id: userId } });
+//     if (!user) throw new NotFoundException('User not found');
+
+//     let verification = await this.verificationRepo.findOne({ where: { user: { id: userId } } });
+
+//     // Safety check for spamming
+//     if (verification?.status === VerificationStatus.PENDING) {
+//       const now = new Date().getTime();
+//       const lastUpdate = new Date(verification.updated_at).getTime();
+//       if (now - lastUpdate < 30000) { 
+//         await this.deletePhysicalFiles([dto.id_card_url, dto.selfie_url]);
+//         throw new BadRequestException('Your request is already being processed. Please wait a moment.');
+//       }
+//     }
+
+//     if (verification?.status === VerificationStatus.APPROVED) {
+//       await this.deletePhysicalFiles([dto.id_card_url, dto.selfie_url]);
+//       throw new BadRequestException('Identity already verified.');
+//     }
+
+//     // 1. Prepare list of old files to delete ONLY if the DB update succeeds
+//     const oldFilesToDelete: string[] = [];
+//     if (verification) {
+//       if (verification.id_card_url) oldFilesToDelete.push(verification.id_card_url);
+//       if (verification.selfie_url) oldFilesToDelete.push(verification.selfie_url);
+//     }
+
+//     const result = await this.dataSource.transaction(async (manager) => {
+//       let savedRecord;
+//       if (verification) {
+//         verification.id_card_url = dto.id_card_url;
+//         verification.selfie_url = dto.selfie_url;
+//         verification.status = VerificationStatus.PENDING;
+//         verification.rejection_reason = null;
+//         savedRecord = await manager.save(verification);
+//       } else {
+//         const newRequest = manager.create(IdentityVerificationEntity, {
+//           user: user,
+//           id_card_url: dto.id_card_url,
+//           selfie_url: dto.selfie_url,
+//           status: VerificationStatus.PENDING,
+//         });
+//         savedRecord = await manager.save(newRequest);
+//       }
+
+//       await manager.save(AuditLogEntity, {
+//         action: 'REQUEST_SUBMITTED',
+//         reason: 'User uploaded identity documents.',
+//         targetUserId: userId,
+//         adminId: null, 
+//       });
+
+//       await this.notificationsService.createNotification({
+//         user_id: null,
+//         audience: 'admin',
+//         title: 'New Verification Request',
+//         message: `${user.fullName} has submitted documents for review.`,
+//         type: 'NEW_IDENTITY_REQUEST', 
+//       });
+
+//       return savedRecord;
+//     });
+
+//     // 2. NOW it is safe to delete the physical old files
+//     if (oldFilesToDelete.length > 0) {
+//       await this.deletePhysicalFiles(oldFilesToDelete);
+//     }
+
+//     await this.broadcastStats();
+//     return result;
+//   }
+
+//   /**
+//    * Admin Review (Approve/Reject)
+//    */
+//   async review(id: number, adminId: number, dto: ReviewVerificationDto) {
+//     const admin = await this.userRepo.findOne({ where: { id: adminId } });
+//     if (!admin) throw new ForbiddenException('Invalid Admin performing review.');
+
+//     const result = await this.dataSource.transaction(async (manager) => {
+//       const verification = await manager.findOne(IdentityVerificationEntity, { 
+//         where: { id },
+//         relations: ['user'], 
+//       });
+
+//       if (!verification) throw new NotFoundException('Request not found');
+//       if (!verification.user) throw new BadRequestException('No user linked.');
+
+//       if (dto.status === VerificationStatus.APPROVED) {
+//         const isCardMissing = !verification.id_card_url || verification.id_card_url.trim() === '';
+//         const isSelfieMissing = !verification.selfie_url || verification.selfie_url.trim() === '';
+
+//         if (isCardMissing || isSelfieMissing) {
+//           throw new BadRequestException('Cannot approve: Identity documents (ID or Selfie) are empty or invalid.');
+//         }
+//       }
+
+//       if (verification.status === dto.status) throw new BadRequestException(`Request is already ${dto.status}.`);
+      
+//       if (dto.status === VerificationStatus.REJECTED && !dto.rejection_reason?.trim()) {
+//         throw new BadRequestException('Rejection reason required.');
+//       }
+
+//       const isApproved = dto.status === VerificationStatus.APPROVED;
+
+//       verification.status = dto.status;
+//       verification.reviewed_by = adminId;
+//       verification.reviewed_at = new Date();
+//       verification.rejection_reason = dto.status === VerificationStatus.REJECTED ? dto.rejection_reason : null;
+      
+//       await manager.save(verification);
+
+//       // --- NEW SAFELY SYNC SEGMENT (ROLES UNTOUCHED) ---
+//       const targetUser = await manager.findOne(UserEntity, { where: { id: verification.user.id } });
+
+//       if (targetUser) {
+//         // Toggle only the logical verification verification flag record 
+//         targetUser.isIdentityVerified = isApproved;
+        
+//         // Roles and active assignments are preserved exactly as they are
+//         await manager.save(targetUser);
+//         verification.user = targetUser;
+//       }
+
+//       await manager.save(AuditLogEntity, {
+//         action: dto.status,
+//         reason: dto.rejection_reason ?? undefined, 
+//         targetUserId: verification.user.id,
+//         adminId: adminId,
+//       });
+
+//       return verification;
+//     });
+
+//     const isApproved = dto.status === VerificationStatus.APPROVED;
+//     await this.notificationsService.createNotification({
+//       user_id: result.user.id,
+//       audience: 'user',
+//       title: isApproved ? 'Identity Verified' : 'Status Updated',
+//       message: isApproved ? 'Your identity is verified!' : `Rejected: ${dto.rejection_reason}`,
+//       type: isApproved ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
+//     });
+
+//     await this.broadcastStats(); 
+//     return result;
+//   }
+  
+//   /**
+//    * Resets a record to Pending (Rollback)
+//    */
+//   async resetToPending(id: number, adminId: number, reason: string) {
+//     const verification = await this.verificationRepo.findOne({ 
+//       where: { id },
+//       relations: ['user'] 
+//     });
+
+//     if (!verification) throw new NotFoundException('Request not found');
+//     if (!verification.user) throw new BadRequestException('No associated user.');
+
+//     await this.dataSource.transaction(async (manager) => {
+//       // Revert verification status text context without touching role strings
+//       await manager.update(UserEntity, verification.user.id, { 
+//         isIdentityVerified: false
+//       });
+      
+//       verification.status = VerificationStatus.PENDING;
+//       verification.rejection_reason = reason || 'Admin manually reset verification to pending.';
+//       verification.reviewed_at = undefined;
+//       verification.reviewed_by = undefined;
+//       await manager.save(verification);
+
+//       await manager.save(AuditLogEntity, {
+//         action: 'RESET_TO_PENDING',
+//         reason: reason || 'Admin manually reset verification to pending.',
+//         targetUserId: verification.user.id,
+//         adminId: adminId,
+//       });
+
+//       await this.notificationsService.createNotification({
+//         user_id: verification.user.id,
+//         audience: 'user',
+//         title: 'Verification Reset',
+//         message: `Your identity verification has been reset to pending for re-review. Reason: ${reason || 'Manual review required.'}`,
+//         type: 'INFO_UPDATE', 
+//       });
+//     });
+
+//     await this.broadcastStats();
+//     return { message: 'Reset successful' };
+//   }
+
+//   /**
+//    * Hard delete of physical images and reset
+//    */
+//   async clearVerificationImages(userId: number, adminId: number) {
+//     const verification = await this.verificationRepo.findOne({ 
+//       where: { user: { id: userId } },
+//       relations: ['user']
+//     });
+    
+//     if (!verification) return { message: 'No images to clear.' };
+
+//     if (!verification.user) {
+//       throw new BadRequestException('Cannot clear images: No associated user found.');
+//     }
+
+//     return await this.dataSource.transaction(async (manager) => {
+//       await this.deletePhysicalFiles([verification.id_card_url, verification.selfie_url]);
+      
+//       verification.id_card_url = null;
+//       verification.selfie_url = null;
+//       verification.status = VerificationStatus.PENDING;
+//       verification.rejection_reason = "Images cleared by admin. Please re-upload.";
+      
+//       // Clear verification parameters safely, preserving roles completely
+//       await manager.update(UserEntity, verification.user.id, {
+//         isIdentityVerified: false
+//       });
+
+//       await manager.save(verification);
+
+//       await manager.save(AuditLogEntity, {
+//         action: 'IMAGES_CLEARED',
+//         reason: 'Admin manually deleted images.',
+//         targetUserId: verification.user.id,
+//         adminId: adminId,
+//       });
+
+//       await this.notificationsService.createNotification({
+//         user_id: verification.user.id,
+//         audience: 'user',
+//         title: 'Action Required: Re-upload ID',
+//         message: 'Your verification images were cleared. Please upload clear copies of your ID and selfie.',
+//         type: 'INFO_UPDATE', 
+//       });
+
+//       await this.broadcastStats();
+//       return { message: 'Images deleted and user notified.' };
+//     });
+//   }
+
+//   /**
+//    * Paginated List
+//    */
+//   async getPaginatedList(page: number, limit: number, search?: string, status?: string) {
+//     const skip = (page - 1) * limit;
+//     const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+
+//     const queryBuilder = this.verificationRepo.createQueryBuilder('verification')
+//       .leftJoinAndSelect('verification.user', 'user') 
+//       .leftJoinAndSelect('verification.reviewer', 'reviewer')
+//       .where('1=1')
+//       .andWhere('user.currentRole != :adminRole', { adminRole: UserRole.ADMIN });
+
+//     if (status && status.toUpperCase() !== 'ALL') {
+//       const upperStatus = status.toUpperCase();
+//       queryBuilder.andWhere('verification.status = :status', { status: upperStatus });
+//     }
+
+//     if (search && search.trim() !== '') {
+//       const searchPattern = `%${search.trim()}%`;
+//       queryBuilder.andWhere(
+//         new Brackets((qb) => {
+//           qb.where('user.fullName ILIKE :searchQuery', { searchQuery: searchPattern })
+//             .orWhere('user.email ILIKE :searchQuery', { searchQuery: searchPattern });
+//         }),
+//       );
+//     }
+
+//     queryBuilder.orderBy('verification.created_at', 'DESC')
+//       .skip(skip)
+//       .take(limit);
+
+//     const [data, total] = await queryBuilder.getManyAndCount();
+
+//     const mappedData = data.map(item => ({
+//       ...item,
+//       id_card_url: item.id_card_url ? `${baseUrl}/${item.id_card_url}` : null,
+//       selfie_url: item.selfie_url ? `${baseUrl}/${item.selfie_url}` : null,
+//     }));
+
+//     return {
+//       data: mappedData,
+//       meta: {
+//         totalItems: total,
+//         itemCount: data.length,
+//         itemsPerPage: Number(limit),
+//         totalPages: Math.ceil(total / limit),
+//         currentPage: Number(page),
+//       },
+//     };
+//   }
+
+//   async exportToCsv() {
+//     const data = await this.verificationRepo.find({
+//       relations: ['user', 'reviewer'], 
+//       order: { created_at: 'DESC' },
+//     });
+    
+//     const header = 'ID,Full Name,Email,Status,Rejection Reason,Reviewed By,Reviewed At,Created At\n';
+    
+//     const rows = data.map(v => {
+//       const fullName = `"${(v.user?.fullName || '').replace(/"/g, '""')}"`;
+//       const email = `"${v.user?.email || ''}"`;
+//       const reason = `"${(v.rejection_reason || '').replace(/"/g, '""')}"`;
+//       const reviewerName = `"${(v.reviewer?.fullName || 'N/A').replace(/"/g, '""')}"`;
+//       const reviewDate = v.reviewed_at ? v.reviewed_at.toISOString() : 'N/A';
+//       const createdAtDate = v.created_at ? v.created_at.toISOString() : 'N/A';
+      
+//       return `${v.id},${fullName},${email},${v.status},${reason},${reviewerName},${reviewDate},${createdAtDate}`;
+//     }).join('\n');
+
+//     return header + rows;
+//   }
+
+//   private async deletePhysicalFiles(filePaths: (string | null)[]) {
+//     const archiveDir = './uploads/archive-identity';
+    
+//     try {
+//       await fs.mkdir(archiveDir, { recursive: true });
+//     } catch (err) {
+//       this.logger.error('Could not create archive directory');
+//     }
+
+//     for (const filePath of filePaths) {
+//       if (!filePath || filePath === 'MANUAL_BYPASS') continue;
+      
+//       try {
+//         const absolutePath = path.resolve(filePath);
+//         const fileName = path.basename(filePath);
+//         const archivedPath = path.join(archiveDir, `${Date.now()}-${fileName}`);
+
+//         await fs.rename(absolutePath, archivedPath);
+//         this.logger.log(`Archived file to: ${archivedPath}`);
+//       } catch (err) {
+//         this.logger.error(`Failed to archive file: ${err}`);
+//       }
+//     }
+//   }
+
+//   async getOne(id: number) {
+//     const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+//     const verification = await this.verificationRepo.findOne({
+//       where: { id },
+//       relations: ['user', 'reviewer'],
+//     });
+
+//     if (!verification) throw new NotFoundException(`Verification with ID ${id} not found`);
+
+//     return {
+//       ...verification,
+//       id_card_url: verification.id_card_url ? `${baseUrl}/${verification.id_card_url}` : null,
+//       selfie_url: verification.selfie_url ? `${baseUrl}/${verification.selfie_url}` : null,
+//     };
+//   }
+// }
+
 import { 
   Injectable, 
   NotFoundException, 
@@ -11,13 +463,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, DataSource, In, Brackets } from 'typeorm';
 import { IdentityVerificationEntity, VerificationStatus } from './entities/identity-verification.entity';
 import { AuditLogEntity } from './entities/audit-log.entity';
-import { UserEntity, UserRole } from '@/users/entity/user.entity'; // Added UserRole import
+import { UserEntity, UserRole } from '@/users/entity/user.entity';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { IdentityGateway } from './identity.gateway'; 
-import { UsersService } from '@/users/users.service'; // Added UsersService import
-import * as fs from 'fs/promises'; 
-import * as path from 'path';
+import { UsersService } from '@/users/users.service';
+import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
+
+export interface CreateVerificationFilesDto {
+  id_card_file: Express.Multer.File;
+  selfie_file: Express.Multer.File;
+}
 
 @Injectable()
 export class IdentityVerificationsService {
@@ -36,11 +492,14 @@ export class IdentityVerificationsService {
 
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService, 
-  ) {}
+  ) {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+  }
 
-  /**
-   * Updates real-time dashboard stats via WebSockets
-   */
   private async broadcastStats() {
     try {
       const stats = await this.getAdminStats();
@@ -50,9 +509,6 @@ export class IdentityVerificationsService {
     }
   }
 
-  /**
-   * Fetches counts and activity for the Admin Dashboard
-   */
   async getAdminStats() {
     const totalPending = await this.verificationRepo.count({
       where: { status: VerificationStatus.PENDING },
@@ -89,87 +545,92 @@ export class IdentityVerificationsService {
     return { totalPending, processedToday, processedAvatars, recentActivity };
   }
 
-  /**
-   * Handles user submission of identity documents
-   */
-async create(userId: number, dto: { id_card_url: string; selfie_url: string }) {
-  const user = await this.userRepo.findOne({ where: { id: userId } });
-  if (!user) throw new NotFoundException('User not found');
+  async create(userId: number, dto: CreateVerificationFilesDto) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
 
-  let verification = await this.verificationRepo.findOne({ where: { user: { id: userId } } });
+    const verification = await this.verificationRepo.findOne({ where: { user: { id: userId } } });
 
-  // Safety check for spamming
-  if (verification?.status === VerificationStatus.PENDING) {
-    const now = new Date().getTime();
-    const lastUpdate = new Date(verification.updated_at).getTime();
-    if (now - lastUpdate < 30000) { 
-      await this.deletePhysicalFiles([dto.id_card_url, dto.selfie_url]);
-      throw new BadRequestException('Your request is already being processed. Please wait a moment.');
+    if (verification?.status === VerificationStatus.PENDING) {
+      const now = new Date().getTime();
+      const lastUpdate = new Date(verification.updated_at).getTime();
+      if (now - lastUpdate < 30000) { 
+        throw new BadRequestException('Your request is already being processed. Please wait a moment.');
+      }
     }
-  }
 
-  if (verification?.status === VerificationStatus.APPROVED) {
-    await this.deletePhysicalFiles([dto.id_card_url, dto.selfie_url]);
-    throw new BadRequestException('Identity already verified.');
-  }
+    if (verification?.status === VerificationStatus.APPROVED) {
+      throw new BadRequestException('Identity already verified.');
+    }
 
-  // 1. Prepare list of old files to delete ONLY if the DB update succeeds
- const oldFilesToDelete: string[] = [];
-  if (verification) {
-    if (verification.id_card_url) oldFilesToDelete.push(verification.id_card_url);
-    if (verification.selfie_url) oldFilesToDelete.push(verification.selfie_url);
-  }
+    this.logger.log(`Initiating secure stream upload to Cloudinary for User ID: ${userId}`);
+    let idCardUpload: UploadApiResponse;
+    let selfieUpload: UploadApiResponse;
 
-  const result = await this.dataSource.transaction(async (manager) => {
-    let savedRecord;
+    try {
+      // Execute uploads in parallel to reduce processing wait times
+      const [idUploadRes, selfieUploadRes] = await Promise.all([
+        this.uploadToCloudinary(dto.id_card_file, 'identity-verifications/id_cards'),
+        this.uploadToCloudinary(dto.selfie_file, 'identity-verifications/selfies'),
+      ]);
+      idCardUpload = idUploadRes;
+      selfieUpload = selfieUploadRes;
+    } catch (uploadError) {
+      this.logger.error('Failed to pipe image stream buffers to Cloudinary', uploadError);
+      throw new BadRequestException('Failed to process and upload asset attachments to storage bucket.');
+    }
+
+    const oldFilesToDelete: string[] = [];
     if (verification) {
-      // We don't delete files here anymore!
-      verification.id_card_url = dto.id_card_url;
-      verification.selfie_url = dto.selfie_url;
-      verification.status = VerificationStatus.PENDING;
-      verification.rejection_reason = null;
-      savedRecord = await manager.save(verification);
-    } else {
-      const newRequest = manager.create(IdentityVerificationEntity, {
-        user: user,
-        id_card_url: dto.id_card_url,
-        selfie_url: dto.selfie_url,
-        status: VerificationStatus.PENDING,
-      });
-      savedRecord = await manager.save(newRequest);
+      if (verification.id_card_url) oldFilesToDelete.push(verification.id_card_url);
+      if (verification.selfie_url) oldFilesToDelete.push(verification.selfie_url);
     }
 
-    await manager.save(AuditLogEntity, {
-      action: 'REQUEST_SUBMITTED',
-      reason: 'User uploaded identity documents.',
-      targetUserId: userId,
-      adminId: null, 
+    const result = await this.dataSource.transaction(async (manager) => {
+      let savedRecord;
+      if (verification) {
+        verification.id_card_url = idCardUpload.secure_url;
+        verification.selfie_url = selfieUpload.secure_url;
+        verification.status = VerificationStatus.PENDING;
+        verification.rejection_reason = null;
+        savedRecord = await manager.save(verification);
+      } else {
+        const newRequest = manager.create(IdentityVerificationEntity, {
+          user: user,
+          id_card_url: idCardUpload.secure_url,
+          selfie_url: selfieUpload.secure_url,
+          status: VerificationStatus.PENDING,
+        });
+        savedRecord = await manager.save(newRequest);
+      }
+
+      await manager.save(AuditLogEntity, {
+        action: 'REQUEST_SUBMITTED',
+        reason: 'User uploaded identity documents to remote storage.',
+        targetUserId: userId,
+        adminId: null, 
+      });
+
+      await this.notificationsService.createNotification({
+        user_id: null,
+        audience: 'admin',
+        title: 'New Verification Request',
+        message: `${user.fullName} has submitted documents for review.`,
+        type: 'NEW_IDENTITY_REQUEST', 
+      });
+
+      return savedRecord;
     });
 
-    await this.notificationsService.createNotification({
-      user_id: null,
-      audience: 'admin',
-      title: 'New Verification Request',
-      message: `${user.fullName} has submitted documents for review.`,
-      type: 'NEW_IDENTITY_REQUEST', 
-    });
+    if (oldFilesToDelete.length > 0) {
+      await this.deleteCloudinaryImages(oldFilesToDelete);
+    }
 
-    return savedRecord;
-  });
-
-  // 2. NOW it is safe to delete the physical old files
-  if (oldFilesToDelete.length > 0) {
-    await this.deletePhysicalFiles(oldFilesToDelete);
+    await this.broadcastStats();
+    return result;
   }
 
-  await this.broadcastStats();
-  return result;
-}
-
-/**
-   * Admin Review (Approve/Reject)
-   */
-async review(id: number, adminId: number, dto: ReviewVerificationDto) {
+  async review(id: number, adminId: number, dto: ReviewVerificationDto) {
     const admin = await this.userRepo.findOne({ where: { id: adminId } });
     if (!admin) throw new ForbiddenException('Invalid Admin performing review.');
 
@@ -183,8 +644,11 @@ async review(id: number, adminId: number, dto: ReviewVerificationDto) {
       if (!verification.user) throw new BadRequestException('No user linked.');
 
       if (dto.status === VerificationStatus.APPROVED) {
-        if (!verification.id_card_url || !verification.selfie_url) {
-          throw new BadRequestException('Cannot approve: Identity documents (ID or Selfie) are missing.');
+        const isCardMissing = !verification.id_card_url || verification.id_card_url.trim() === '';
+        const isSelfieMissing = !verification.selfie_url || verification.selfie_url.trim() === '';
+
+        if (isCardMissing || isSelfieMissing) {
+          throw new BadRequestException('Cannot approve: Identity documents (ID or Selfie) are empty or invalid.');
         }
       }
 
@@ -203,19 +667,13 @@ async review(id: number, adminId: number, dto: ReviewVerificationDto) {
       
       await manager.save(verification);
 
-      // --- SYNC START ---
-      // Update the database directly
-      await manager.update(UserEntity, verification.user.id, {
-        isIdentityVerified: isApproved,
-        isPerformer: isApproved,
-        currentRole: isApproved ? UserRole.PERFORMER : UserRole.REQUESTER
-      });
+      const targetUser = await manager.findOne(UserEntity, { where: { id: verification.user.id } });
 
-      // Update the local object so Postman shows the new data immediately
-      verification.user.isIdentityVerified = isApproved;
-      verification.user.isPerformer = isApproved;
-      verification.user.currentRole = isApproved ? UserRole.PERFORMER : UserRole.REQUESTER;
-      // --- SYNC END ---
+      if (targetUser) {
+        targetUser.isIdentityVerified = isApproved;
+        await manager.save(targetUser);
+        verification.user = targetUser;
+      }
 
       await manager.save(AuditLogEntity, {
         action: dto.status,
@@ -231,7 +689,7 @@ async review(id: number, adminId: number, dto: ReviewVerificationDto) {
     await this.notificationsService.createNotification({
       user_id: result.user.id,
       audience: 'user',
-      title: isApproved ? 'Identity Verified' : 'Status Updated',
+      title: 'Status Updated',
       message: isApproved ? 'Your identity is verified!' : `Rejected: ${dto.rejection_reason}`,
       type: isApproved ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
     });
@@ -239,11 +697,8 @@ async review(id: number, adminId: number, dto: ReviewVerificationDto) {
     await this.broadcastStats(); 
     return result;
   }
-
-  /**
-   * Resets a record to Pending (Rollback)
-   */
-async resetToPending(id: number, adminId: number) {
+  
+  async resetToPending(id: number, adminId: number, reason: string) {
     const verification = await this.verificationRepo.findOne({ 
       where: { id },
       relations: ['user'] 
@@ -252,25 +707,25 @@ async resetToPending(id: number, adminId: number) {
     if (!verification) throw new NotFoundException('Request not found');
     if (!verification.user) throw new BadRequestException('No associated user.');
 
+    // Standardize the reason display
+    const displayReason = reason && reason.trim().length > 0 
+      ? reason.trim() 
+      : "No reason provided";
+
     await this.dataSource.transaction(async (manager) => {
-      // --- SYNC START ---
-      // Revert user to Requester role immediately in the DB
       await manager.update(UserEntity, verification.user.id, { 
-        isIdentityVerified: false,
-        isPerformer: false,
-        currentRole: UserRole.REQUESTER
+        isIdentityVerified: false
       });
-      // --- SYNC END ---
       
       verification.status = VerificationStatus.PENDING;
-      verification.rejection_reason = null;
-      verification.reviewed_at = undefined; // Clears the TS 'null' error
-      verification.reviewed_by = undefined; // Clears the TS 'null' error
+      verification.rejection_reason = displayReason;
+      verification.reviewed_at = undefined;
+      verification.reviewed_by = undefined;
       await manager.save(verification);
 
       await manager.save(AuditLogEntity, {
         action: 'RESET_TO_PENDING',
-        reason: 'Admin manually reset verification to pending.',
+        reason: displayReason,
         targetUserId: verification.user.id,
         adminId: adminId,
       });
@@ -279,7 +734,8 @@ async resetToPending(id: number, adminId: number) {
         user_id: verification.user.id,
         audience: 'user',
         title: 'Verification Reset',
-        message: 'Your identity verification has been reset to pending for re-review.',
+        // This will now consistently output: "Reason: No reason provided"
+        message: `Your identity verification has been reset to pending. Reason: ${displayReason}`,
         type: 'INFO_UPDATE', 
       });
     });
@@ -288,80 +744,60 @@ async resetToPending(id: number, adminId: number) {
     return { message: 'Reset successful' };
   }
 
-  /**
-   * Hard delete of physical images and reset
-   */
-async clearVerificationImages(userId: number, adminId: number) {
-  // Change 'id' to find by user relationship
-  const verification = await this.verificationRepo.findOne({ 
-    where: { user: { id: userId } }, // Look for the record belonging to this user
-    relations: ['user']
-  });
-  
-  // If no verification exists, just exit quietly (important for softRemove)
-  if (!verification) return { message: 'No images to clear.' };
+  async clearVerificationImages(userId: number, adminId: number) {
+    const verification = await this.verificationRepo.findOne({ 
+      where: { user: { id: userId } },
+      relations: ['user']
+    });
+    
+    if (!verification) return { message: 'No images to clear.' };
+    if (!verification.user) throw new BadRequestException('Cannot clear images: No associated user found.');
 
-  if (!verification.user) {
-    throw new BadRequestException('Cannot clear images: No associated user found.');
+    return await this.dataSource.transaction(async (manager) => {
+      await this.deleteCloudinaryImages([verification.id_card_url, verification.selfie_url]);
+      
+      verification.id_card_url = null;
+      verification.selfie_url = null;
+      verification.status = VerificationStatus.PENDING;
+      verification.rejection_reason = "Images cleared by admin. Please re-upload.";
+      
+      await manager.update(UserEntity, verification.user.id, {
+        isIdentityVerified: false
+      });
+
+      await manager.save(verification);
+
+      await manager.save(AuditLogEntity, {
+        action: 'IMAGES_CLEARED',
+        reason: 'Admin manually deleted images from server array buckets.',
+        targetUserId: verification.user.id,
+        adminId: adminId,
+      });
+
+      await this.notificationsService.createNotification({
+        user_id: verification.user.id,
+        audience: 'user',
+        title: 'Action Required: Re-upload ID',
+        message: 'Your verification images were cleared. Please upload clear copies of your ID and selfie.',
+        type: 'INFO_UPDATE', 
+      });
+
+      await this.broadcastStats();
+      return { message: 'Images deleted from Cloudinary storage array and user notified.' };
+    });
   }
 
-  return await this.dataSource.transaction(async (manager) => {
-    // 1. Archive physical files
-    await this.deletePhysicalFiles([verification.id_card_url, verification.selfie_url]);
-    
-    // 2. Reset database fields
-    verification.id_card_url = null;
-    verification.selfie_url = null;
-    verification.status = VerificationStatus.PENDING;
-    verification.rejection_reason = "Images cleared by admin. Please re-upload.";
-    
-    // Note: Since we are clearing images, we should also 
-    // sync the user role back to REQUESTER to be safe.
-    await manager.update(UserEntity, verification.user.id, {
-      isIdentityVerified: false,
-      isPerformer: false,
-      currentRole: UserRole.REQUESTER
-    });
-
-    await manager.save(verification);
-
-    // 3. Audit Log
-    await manager.save(AuditLogEntity, {
-      action: 'IMAGES_CLEARED',
-      reason: 'Admin manually deleted images.',
-      targetUserId: verification.user.id,
-      adminId: adminId,
-    });
-
-    // 4. Notification
-    await this.notificationsService.createNotification({
-      user_id: verification.user.id,
-      audience: 'user',
-      title: 'Action Required: Re-upload ID',
-      message: 'Your verification images were cleared. Please upload clear copies of your ID and selfie.',
-      type: 'INFO_UPDATE', 
-    });
-
-    await this.broadcastStats();
-    return { message: 'Images deleted and user notified.' };
-  });
-}
-
-  /**
-   * Paginated List
-   */
   async getPaginatedList(page: number, limit: number, search?: string, status?: string) {
     const skip = (page - 1) * limit;
-    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
 
     const queryBuilder = this.verificationRepo.createQueryBuilder('verification')
       .leftJoinAndSelect('verification.user', 'user') 
       .leftJoinAndSelect('verification.reviewer', 'reviewer')
-      .where('1=1');
+      .where('1=1')
+      .andWhere('user.currentRole != :adminRole', { adminRole: UserRole.ADMIN });
 
     if (status && status.toUpperCase() !== 'ALL') {
-      const upperStatus = status.toUpperCase();
-      queryBuilder.andWhere('verification.status = :status', { status: upperStatus });
+      queryBuilder.andWhere('verification.status = :status', { status: status.toUpperCase() });
     }
 
     if (search && search.trim() !== '') {
@@ -380,14 +816,8 @@ async clearVerificationImages(userId: number, adminId: number) {
 
     const [data, total] = await queryBuilder.getManyAndCount();
 
-    const mappedData = data.map(item => ({
-      ...item,
-      id_card_url: item.id_card_url ? `${baseUrl}/${item.id_card_url}` : null,
-      selfie_url: item.selfie_url ? `${baseUrl}/${item.selfie_url}` : null,
-    }));
-
     return {
-      data: mappedData,
+      data: data, 
       meta: {
         totalItems: total,
         itemCount: data.length,
@@ -400,66 +830,92 @@ async clearVerificationImages(userId: number, adminId: number) {
 
 async exportToCsv() {
   const data = await this.verificationRepo.find({
-    relations: ['user', 'reviewer'], 
+    relations: ['user', 'reviewer'],
     order: { created_at: 'DESC' },
   });
-  
-  const header = 'ID,Full Name,Email,Status,Rejection Reason,Reviewed By,Reviewed At,Created At\n';
-  
-  const rows = data.map(v => {
-    // Sanitize fields by replacing double quotes and wrapping in quotes
-    const fullName = `"${(v.user?.fullName || '').replace(/"/g, '""')}"`;
-    const email = `"${v.user?.email || ''}"`;
-    const reason = `"${(v.rejection_reason || '').replace(/"/g, '""')}"`;
-    const reviewerName = `"${(v.reviewer?.fullName || 'N/A').replace(/"/g, '""')}"`;
-    const reviewDate = v.reviewed_at ? v.reviewed_at.toISOString() : 'N/A';
-    
-    return `${v.id},${fullName},${email},${v.status},${reason},${reviewerName},${reviewDate},${v.created_at?.toISOString()}`;
-  }).join('\n');
 
-  return header + rows;
+  // 1. Define your headers
+  const headers = ['ID', 'Full Name', 'Email', 'Status', 'Rejection Reason', 'Reviewer', 'Created At', 'ID Card URL', 'Selfie URL'];
+
+  // 2. Helper function to format cell values for CSV
+  const formatCell = (val: any) => {
+    const stringVal = String(val ?? '');
+    // Escape double quotes by doubling them, then wrap the whole value in quotes
+    return `"${stringVal.replace(/"/g, '""')}"`;
+  };
+
+  // 3. Create the rows
+  const rows = data.map(v => [
+    formatCell(v.id),
+    formatCell(v.user?.fullName || ''),
+    formatCell(v.user?.email || ''),
+    formatCell(v.status),
+    formatCell(v.rejection_reason || 'N/A'),
+    formatCell(v.reviewer?.fullName || 'Unassigned'),
+    formatCell(v.created_at),
+    formatCell(v.id_card_url || ''),
+    formatCell(v.selfie_url || '')
+  ].join(','));
+
+  // 4. Combine headers and rows
+  return [headers.join(','), ...rows].join('\n');
 }
 
-private async deletePhysicalFiles(filePaths: (string | null)[]) {
-  const archiveDir = './uploads/archive-identity';
-  
-  // Ensure the archive directory exists
-  try {
-    await fs.mkdir(archiveDir, { recursive: true });
-  } catch (err) {
-    this.logger.error('Could not create archive directory');
+  private async uploadToCloudinary(file: Express.Multer.File, folder: string): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { folder: folder, resource_type: 'auto' },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new BadRequestException('Cloudinary did not return a valid upload response response object.'));
+          
+          resolve(result);
+        },
+      );
+      uploadStream.end(file.buffer);
+    });
   }
 
-  for (const filePath of filePaths) {
-    if (!filePath || filePath === 'MANUAL_BYPASS') continue;
-    
+  private extractPublicIdFromUrl(url: string): string | null {
+    if (!url || !url.includes('res.cloudinary.com')) return null;
     try {
-      const absolutePath = path.resolve(filePath);
-      const fileName = path.basename(filePath);
-      const archivedPath = path.join(archiveDir, `${Date.now()}-${fileName}`);
-
-      // MOVE the file instead of UNLINKING it
-      await fs.rename(absolutePath, archivedPath);
-      this.logger.log(`Archived file to: ${archivedPath}`);
-    } catch (err) {
-      this.logger.error(`Failed to archive file: ${err}`);
+      const segments = url.split('/upload/');
+      if (segments.length < 2) return null;
+      
+      const pathWithExtension = segments[1].replace(/^v\d+\//, '');
+      
+      const lastDotIndex = pathWithExtension.lastIndexOf('.');
+      if (lastDotIndex === -1) return pathWithExtension;
+      return pathWithExtension.substring(0, lastDotIndex);
+    } catch (e) {
+      this.logger.error(`Could not parse Cloudinary Public ID key parameter from: ${url}`);
+      return null;
     }
   }
-}
+
+  private async deleteCloudinaryImages(urls: (string | null)[]) {
+    for (const url of urls) {
+      if (!url || url === 'MANUAL_BYPASS') continue;
+      
+      const publicId = this.extractPublicIdFromUrl(url);
+      if (!publicId) continue;
+
+      try {
+        const result = await cloudinary.uploader.destroy(publicId);
+        this.logger.log(`Cloudinary deletion completed for [${publicId}]: Result -> ${JSON.stringify(result)}`);
+      } catch (err) {
+        this.logger.error(`Failed to wipe asset context image relative to handle ID [${publicId}] on remote CDN bucket: ${err}`);
+      }
+    }
+  }
 
   async getOne(id: number) {
-    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
     const verification = await this.verificationRepo.findOne({
       where: { id },
       relations: ['user', 'reviewer'],
     });
 
     if (!verification) throw new NotFoundException(`Verification with ID ${id} not found`);
-
-    return {
-      ...verification,
-      id_card_url: verification.id_card_url ? `${baseUrl}/${verification.id_card_url}` : null,
-      selfie_url: verification.selfie_url ? `${baseUrl}/${verification.selfie_url}` : null,
-    };
+    return verification;
   }
 }
