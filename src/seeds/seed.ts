@@ -1,6 +1,15 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
 import { Category } from '@/categories/entities/category.entity';
+import {
+  TaskEntity,
+  TaskStatus,
+} from '@/tasks/entities/task.entity';
+
+import {
+  TaskApplicationEntity,
+  ApplicationStatus,
+} from '@/applications/entities/task-application.entity';
 import * as bcrypt from 'bcrypt';
 
 const seedDatabase = async () => {
@@ -13,6 +22,13 @@ const seedDatabase = async () => {
     const userRepository = AppDataSource.getRepository(UserEntity);
     const categoryRepository =
       AppDataSource.getRepository(Category);
+    const taskRepository =
+      AppDataSource.getRepository(TaskEntity);
+
+    const applicationRepository =
+      AppDataSource.getRepository(
+        TaskApplicationEntity,
+      );
 
     console.log('Starting database seed...');
 
@@ -145,6 +161,7 @@ const seedDatabase = async () => {
 
         await categoryRepository.save(newCategory);
 
+
         console.log(
           `Category created: ${categoryData.name}`,
         );
@@ -154,6 +171,116 @@ const seedDatabase = async () => {
         );
       }
     }
+    // =====================================================
+// TASKS
+// =====================================================
+
+const requester =
+  await userRepository.findOne({
+    where: {
+      email: 'jane.smith@jomnus.com',
+    },
+  });
+
+if (requester) {
+  const tasks = [
+    {
+      title:
+        'Luxury Penthouse UI Redesign',
+      description:
+        'Need modern UI redesign',
+      requester_id: requester.id,
+      price: 4200,
+      deadline: new Date(
+        '2026-12-31',
+      ),
+      required_workers: 1,
+      status: TaskStatus.POSTED,
+      location_text:
+        'Phnom Penh',
+    },
+
+    {
+      title:
+        'E-commerce API Integration',
+      description:
+        'Backend API work',
+      requester_id: requester.id,
+      price: 1850,
+      deadline: new Date(
+        '2026-12-31',
+      ),
+      required_workers: 1,
+      status: TaskStatus.POSTED,
+      location_text:
+        'Siem Reap',
+    },
+  ];
+
+  for (const taskData of tasks) {
+    const exists =
+      await taskRepository.findOne({
+        where: {
+          title:
+            taskData.title,
+        },
+      });
+
+    if (!exists) {
+      const task =
+        taskRepository.create(
+          taskData,
+        );
+
+      await taskRepository.save(
+        task,
+      );
+
+      console.log(
+        `Task created: ${task.title}`,
+      );
+    }
+  }
+}
+// ================= APPLICATIONS =================
+
+const applications = [
+  {
+    task_id: 1,
+    performer_id: 1,
+    offered_price: 4200,
+    status: ApplicationStatus.PENDING,
+  },
+  {
+    task_id: 2,
+    performer_id: 1,
+    offered_price: 1850,
+    status: ApplicationStatus.ACCEPTED,
+  },
+];
+
+for (const appData of applications) {
+  const exists =
+    await applicationRepository.findOne({
+      where: {
+        task_id: appData.task_id,
+        performer_id: appData.performer_id,
+      },
+    });
+
+  if (!exists) {
+    const application =
+      applicationRepository.create(appData);
+
+    await applicationRepository.save(
+      application,
+    );
+
+    console.log(
+      `Application created for task ${appData.task_id}`,
+    );
+  }
+}
 
     console.log(
       'Database seeding completed successfully!',

@@ -78,6 +78,12 @@ export class adminServices {
   async getAllTaskApplications(id: number) {
     return await this.applicationRepository.find({
       where: { task_id: id },
+
+      relations: [
+      "task",
+      "performer",
+      "task.requester"
+     ],
     });
   }
 
@@ -211,6 +217,13 @@ async paginateUsers(page: number, limit: number, search?: string, role?: string,
     const [applications, total] = await this.applicationRepository.findAndCount({
       skip: (page - 1) * limit,
       take: limit,
+
+      relations: {
+        task: {
+          requester: true
+        },
+        performer: true
+      }
     });
     return {
       data: applications,
