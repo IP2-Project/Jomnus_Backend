@@ -1,6 +1,6 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
-import { Category } from '@/categories/entities/category.entity';
+import { CategoryEntity } from '@/categories/entities/category.entity';
 import {
   TaskEntity,
   TaskStatus,
@@ -21,7 +21,7 @@ const seedDatabase = async () => {
 
     const userRepository = AppDataSource.getRepository(UserEntity);
     const categoryRepository =
-      AppDataSource.getRepository(Category);
+      AppDataSource.getRepository(CategoryEntity);
     const taskRepository =
       AppDataSource.getRepository(TaskEntity);
 
