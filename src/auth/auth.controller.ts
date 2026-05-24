@@ -48,7 +48,7 @@ export class AuthController {
     path: '/',
   };
 
-  private getFrontendUrl(): string {
+  private getFrontendUrl(req?: ExpressRequest): string {
     const nodeEnv =
       this.configService.get<string>('NODE_ENV') ||
       process.env.NODE_ENV ||
@@ -58,6 +58,16 @@ export class AuthController {
       /\/+$/,
       '',
     );
+    const inferredHost =
+      (typeof req?.headers?.['x-forwarded-host'] === 'string'
+        ? req?.headers?.['x-forwarded-host']
+        : undefined) ||
+      req?.headers?.host ||
+      '';
+    const inferredProto =
+      (typeof req?.headers?.['x-forwarded-proto'] === 'string'
+        ? req?.headers?.['x-forwarded-proto']
+        : undefined) || '';
 
     const rawFrontendUrl =
       this.configService.get<string>('FRONTEND_URL') ||
@@ -78,12 +88,43 @@ export class AuthController {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const requestLooksRemote =
+      !!inferredHost && !isLocalhost(inferredHost) && !/^\[?::1\]?$/i.test(inferredHost);
+
     const likelyProd =
-      nodeEnv === 'production' || (!!appUrl && !isLocalhost(appUrl));
+      nodeEnv === 'production' ||
+      requestLooksRemote ||
+      (!!appUrl && !isLocalhost(appUrl));
 
     if ((!frontendUrl || isLocalhost(frontendUrl)) && likelyProd) {
       const firstNonLocalOrigin = corsOrigins.find((o) => !isLocalhost(o));
       if (firstNonLocalOrigin) frontendUrl = sanitize(firstNonLocalOrigin);
+    }
+
+    if ((!frontendUrl || isLocalhost(frontendUrl)) && likelyProd && appUrl) {
+      try {
+        const url = new URL(appUrl);
+        if (url.hostname.startsWith('api.')) {
+          url.hostname = url.hostname.replace(/^api\./, '');
+          frontendUrl = sanitize(url.toString());
+        } else if (url.hostname.includes('jomnusapi.')) {
+          url.hostname = url.hostname.replace('jomnusapi.', 'jomnus.');
+          frontendUrl = sanitize(url.toString());
+        }
+      } catch {
+        // ignore invalid APP_URL
+      }
+    }
+
+    if (
+      (!frontendUrl || isLocalhost(frontendUrl)) &&
+      likelyProd &&
+      inferredHost &&
+      inferredProto
+    ) {
+      // If we're behind a reverse proxy and can infer the external URL,
+      // redirect to the same "site" host by default (frontend can route /auth/callback).
+      frontendUrl = sanitize(`${inferredProto}://${inferredHost}`);
     }
 
     if (!frontendUrl) {
@@ -234,7 +275,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    const frontendUrl = this.getFrontendUrl();
+    const frontendUrl = this.getFrontendUrl(req);
     const qs = new URLSearchParams({
       token: session.accessToken,
       role: session.user.role,
