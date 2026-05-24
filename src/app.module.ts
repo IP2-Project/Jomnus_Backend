@@ -30,7 +30,12 @@ import { MessagesModule } from './messages/messages.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Prefer environment-specific file when present (e.g. `.env.production`),
+      // but keep `.env` as a fallback for local/dev.
+      envFilePath: [
+        process.env.NODE_ENV === 'production' ? '.env.production' : '.env',
+        '.env',
+      ],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

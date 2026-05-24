@@ -1,7 +1,7 @@
 services:
   api:
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     build:
       context: .
       dockerfile: Dockerfile
@@ -58,7 +58,7 @@ services:
   db:
     image: postgres:15-alpine
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     environment:
       - POSTGRES_USER=${DB_USERNAME}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
