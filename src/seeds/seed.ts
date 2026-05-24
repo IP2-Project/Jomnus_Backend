@@ -1,6 +1,8 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
 import { CategoryEntity } from '../categories/entities/category.entity';
+import * as bcrypt from 'bcrypt';
+
 const seedDatabase = async () => {
   try {
     // Initialize database connection
@@ -22,10 +24,7 @@ const seedDatabase = async () => {
     });
 
     if (!adminExists) {
-      const hashedAdminPassword = await bcrypt.hash(
-        'JomnusAdmin@12345',
-        10,
-      );
+      const hashedAdminPassword = await bcrypt.hash('JomnusAdmin@12345', 10);
 
       const adminUser = userRepository.create({
         email: 'admin@jomnus.com',
@@ -135,10 +134,7 @@ const seedDatabase = async () => {
       });
 
       if (!userExists) {
-        const hashedPassword = await bcrypt.hash(
-          userData.password!,
-          10,
-        );
+        const hashedPassword = await bcrypt.hash(userData.password!, 10);
 
         const newUser = userRepository.create({
           ...userData,
