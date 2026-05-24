@@ -7,6 +7,7 @@ import { Proof, ProofStatus } from './entities/task-proof.entity';
 import { AssignmentStatus, TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
 import { TaskEntity, TaskStatus } from '@/tasks/entities/task.entity';
 import { UserEntity } from '@/users/entity/user.entity';
+import { NotificationsService } from '@/notifications/notifications.service';
 // import { Review } from '@/reviews/entities/review.entity';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class ProofsService {
     private readonly assignmentRepository: Repository<TaskAssignmentEntity>,
     @InjectRepository(TaskEntity)
     private readonly taskRepository: Repository<TaskEntity>,
+    private readonly notificationsService: NotificationsService
   ) {}
 
   async submitProof(createProofDto: CreateProofDto): Promise<Proof> {
@@ -39,6 +41,15 @@ export class ProofsService {
     await this.assignmentRepository.update(assignment.id, {
       status: AssignmentStatus.COMPLETED,
     });
+
+    const task = await this.taskRepository.findOne({ where: { id: assignment.task_id } });
+    if (task) {
+        await this.notificationsService.notifyProofSubmitted(
+            task.requester_id, 
+            task.title, 
+            task.id
+        );
+    }
 
     return saved;
   }
@@ -88,6 +99,12 @@ export class ProofsService {
         verified_at: new Date(),
       });
 
+      await this.notificationsService.notifySubmissionApproved(
+          assignment.performer_id, 
+          task.title, 
+          task.id
+      );  
+
       const taskAssignments = await this.assignmentRepository.find({
         where: { task_id: task.id },
       });
@@ -120,6 +137,18 @@ export class ProofsService {
         created_at: 'DESC',
       },
     });
+  }
+
+  async findByAssignment(assignmentId: number) {
+      return this.proofRepository.find({
+          where: {
+              assignment_id: assignmentId,
+          },
+
+          order: {
+              created_at: 'DESC',
+          },
+      });
   }
 
 }

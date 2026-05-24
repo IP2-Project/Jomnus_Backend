@@ -9,6 +9,7 @@ import { TaskStatus } from '@/tasks/entities/task.entity';
 import { AssignmentsService } from '@/assignments/assignments.service';
 import { UsersService } from '@/users/users.service';
 import { UserEntity } from '@/users/entity/user.entity';
+import { NotificationsService } from '@/notifications/notifications.service';
 
 @Injectable()
 export class ApplicationsService {
@@ -17,7 +18,8 @@ export class ApplicationsService {
         private appRepo: Repository<TaskApplicationEntity>,
         private tasksService: TasksService,
         private assignmentsService: AssignmentsService,
-        private userService: UsersService
+        private userService: UsersService,
+        private notificationsService: NotificationsService
     ) {}
 
     async create(dto: CreateApplicationDto, userId: number) {
@@ -28,8 +30,7 @@ export class ApplicationsService {
         }
 
         if (
-            task.status !== TaskStatus.POSTED &&
-            task.status !== TaskStatus.ACCEPTED
+            task.status !== TaskStatus.POSTED
         ) {
             throw new BadRequestException(
                 'Task is no longer accepting applications'
@@ -74,10 +75,20 @@ export class ApplicationsService {
 
         const saved = await this.appRepo.save(app);
 
-        return this.appRepo.findOne({
+        const applicationWithPerformer = await this.appRepo.findOne({
             where: { id: saved.id },
             relations: ['performer'],
         });
+        
+        if (applicationWithPerformer && applicationWithPerformer.performer) {
+            await this.notificationsService.notifyNewApplicant(
+                task.requester_id, 
+                applicationWithPerformer.performer.fullName, 
+                task.title, 
+                task.id
+            );
+        }
+        return applicationWithPerformer;
     }
 
     async findMine(userId: number) {
@@ -195,8 +206,7 @@ export class ApplicationsService {
         }
 
         if (
-            task.status !== TaskStatus.POSTED &&
-            task.status !== TaskStatus.ACCEPTED
+            task.status !== TaskStatus.POSTED
         ) {
             throw new BadRequestException('Task not accepting applications');
         }
@@ -222,15 +232,11 @@ export class ApplicationsService {
             application.id,
             application.offered_price 
         );
-
-        if (task.status === TaskStatus.POSTED) {
-            const requester = await this.userService.findById(task.requester_id);
-            await this.tasksService.update(
-                task.id,
-                { status: TaskStatus.ACCEPTED },
-                requester!,
-            );
-        }
+        await this.notificationsService.notifyApplicationAccepted(
+            application.performer_id, 
+            task.title, 
+            task.id
+        );
 
         return { message: 'Application accepted' };
     }

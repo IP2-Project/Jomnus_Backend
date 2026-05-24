@@ -1,15 +1,14 @@
 import { 
   Controller, Get, Patch, Post, Param, Body, ParseIntPipe, 
   Request, UseGuards, ForbiddenException, Logger, Query,
-  UseInterceptors, UploadedFiles, BadRequestException, Response, Delete,
+  UseInterceptors, UploadedFiles, BadRequestException, Response,
   ClassSerializerInterceptor 
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { IdentityVerificationsService } from './identity-verifications.service';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.auth.guard';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import type { Response as ExpressResponse } from 'express';
 
 @Controller('identity-verifications')
@@ -71,13 +70,7 @@ export class IdentityVerificationsController {
         { name: 'selfie', maxCount: 1 },
       ],
       {
-        storage: diskStorage({
-          destination: './uploads/identity-verifications',
-          filename: (req, file, callback) => {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-            callback(null, `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`);
-          },
-        }),
+        storage: memoryStorage(),
         limits: { fileSize: 5 * 1024 * 1024 },
         fileFilter: (req, file, callback) => {
           if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
@@ -96,15 +89,14 @@ export class IdentityVerificationsController {
     if (!files?.id_card?.[0] || !files?.selfie?.[0]) {
       throw new BadRequestException('Both an ID Card image and a Selfie image are required.');
     }
-    const dto = {
-      id_card_url: files.id_card[0].path.replace(/\\/g, '/'),
-      selfie_url: files.selfie[0].path.replace(/\\/g, '/'),
-    };
-    return this.service.create(userId, dto);
+
+    return this.service.create(userId, {
+      id_card_file: files.id_card[0],
+      selfie_file: files.selfie[0],
+    });
   }
 
   // --- REVIEW FLOW ---
-
   @UseGuards(JwtAuthGuard)
   @Patch(':id/review')
   async review(
@@ -117,24 +109,21 @@ export class IdentityVerificationsController {
     return this.service.review(id, adminId, dto);
   }
 
-  /**
-   * Logic Test 1: Admin Reset
-   * Reverts PERFORMER to REQUESTER and status to PENDING
-   */
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reset')
-  async reset(@Param('id', ParseIntPipe) id: number, @Request() req) {
+  async reset(
+    @Param('id', ParseIntPipe) id: number, 
+    @Body() body: { reason?: string }, 
+    @Request() req
+  ) {
     this.checkAdmin(req);
     const adminId = this.getUserId(req);
-    return this.service.resetToPending(id, adminId);
+    const reasonText = body?.reason?.trim() || "Admin initiated reset to pending";
+    return this.service.resetToPending(id, adminId, reasonText);
   }
-
-  /**
-   * Logic Test 2: Clear Images
-   * Moves files to archive and resets image paths
-   */
+  
   @UseGuards(JwtAuthGuard)
-  @Patch(':id/clear-images') // Changed to Patch to match service logic
+  @Patch(':id/clear-images')
   async clearImages(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
     const adminId = this.getUserId(req);
@@ -142,7 +131,6 @@ export class IdentityVerificationsController {
   }
 
   // --- HELPERS ---
-
   private checkAdmin(req: any) {
     const userRole = req.user?.currentRole || req.user?.role || req.user?.current_role;
     if (userRole !== 'ADMIN') {

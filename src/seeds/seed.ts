@@ -13,41 +13,51 @@ const seedDatabase = async () => {
 
     console.log('Starting database seed...');
 
-    // Check if admin user already exists
+    // =====================================================
+    // ADMIN USER
+    // =====================================================
+
     const adminExists = await userRepository.findOne({
       where: { email: 'admin@jomnus.com' },
     });
 
-    if (adminExists) {
-      console.log('Admin user already exists, skipping seed');
-      return;
+    if (!adminExists) {
+      const hashedAdminPassword = await bcrypt.hash(
+        'JomnusAdmin@12345',
+        10,
+      );
+
+      const adminUser = userRepository.create({
+        email: 'admin@jomnus.com',
+        password: hashedAdminPassword,
+        fullName: 'Jomnus Admin',
+        currentRole: UserRole.ADMIN,
+      });
+
+      await userRepository.save(adminUser);
+
+      console.log('Admin user created');
+    } else {
+      console.log('Admin user already exists');
     }
 
-    // Create admin user
-    const adminUser = userRepository.create({
-      email: 'admin@jomnus.com',
-      password: 'JomnusAdmin@12345',
-      fullName: 'Jomnus Admin',
-      currentRole: UserRole.ADMIN,
-    });
+    // =====================================================
+    // SAMPLE USERS
+    // =====================================================
 
-    await userRepository.save(adminUser);
-    console.log('Admin user created');
-
-    // Create sample users
     const users: Partial<UserEntity>[] = [
       {
         email: 'john.doe@jomnus.com',
         password: 'User@123456',
         city: 'Phnom Penh',
-        fullName: 'john doe',
+        fullName: 'John Doe',
         country: 'Cambodia',
         currentRole: UserRole.PERFORMER,
       },
       {
         email: 'jane.smith@jomnus.com',
         password: 'User@123456',
-        fullName: 'jane smith',
+        fullName: 'Jane Smith',
         city: 'Siem Reap',
         country: 'Cambodia',
         currentRole: UserRole.REQUESTER,
@@ -55,7 +65,7 @@ const seedDatabase = async () => {
       {
         email: 'michael.johnson@jomnus.com',
         password: 'User@123456',
-        fullName: 'Michae johnl',
+        fullName: 'Michael Johnson',
         city: 'Battambang',
         country: 'Cambodia',
         currentRole: UserRole.REQUESTER,
@@ -125,9 +135,21 @@ const seedDatabase = async () => {
       });
 
       if (!userExists) {
-        const newUser = userRepository.create(userData);
+        const hashedPassword = await bcrypt.hash(
+          userData.password!,
+          10,
+        );
+
+        const newUser = userRepository.create({
+          ...userData,
+          password: hashedPassword,
+        });
+
         await userRepository.save(newUser);
+
         console.log(`User created: ${userData.email}`);
+      } else {
+        console.log(`User already exists: ${userData.email}`);
       }
     }
 
@@ -146,6 +168,7 @@ const seedDatabase = async () => {
     console.log('Database seeding completed successfully!');
   } catch (error) {
     console.error('Error seeding database:', error);
+
     process.exit(1);
   } finally {
     if (AppDataSource.isInitialized) {

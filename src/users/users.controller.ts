@@ -196,6 +196,12 @@ export class UsersController {
   // --- GENERAL SEARCH ---
 
   @UseGuards(JwtAuthGuard)
+  @Get('profile/:id')
+  async getUserProfile(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.findById(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   async findById(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);

@@ -21,7 +21,6 @@ export enum TaskStatus {
   VERIFIED = 'VERIFIED',
   CANCELLED = 'CANCELLED',
 }
-
 @Entity('tasks')
 export class TaskEntity {
   @PrimaryGeneratedColumn()
