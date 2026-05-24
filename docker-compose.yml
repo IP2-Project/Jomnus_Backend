@@ -16,7 +16,7 @@ services:
       - ./package.json:/app/package.json:cached
       - ./node_modules:/app/node_modules
     ports:
-      - '3001:3001'
+      - '3222:3001'
     environment:
       - NODE_ENV=${NODE_ENV}
       - PORT=${PORT}
@@ -48,7 +48,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 30s 
+      start_period: 30s
     logging:
       driver: 'json-file'
       options:
@@ -84,7 +84,7 @@ services:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
     ports:
-      - '5050:80'
+      - '5022:80'
     depends_on:
       db:
         condition: service_healthy
