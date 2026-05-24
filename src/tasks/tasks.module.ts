@@ -17,6 +17,7 @@ import { StatsModule } from '@/stats/stats.module';
       TaskCategory,
       CategoryEntity,
       ConversationsEntity,
+      TaskApplicationEntity,
     ]),
     CategoriesModule,
   ],
