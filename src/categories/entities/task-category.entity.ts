@@ -1,6 +1,13 @@
 import { TaskEntity } from '@/tasks/entities/task.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Unique } from 'typeorm';
-import { Category } from './category.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  Unique,
+} from 'typeorm';
+import { CategoryEntity } from './category.entity';
 
 @Entity('task_categories')
 @Unique(['task_id', 'category_id'])
@@ -18,7 +25,7 @@ export class TaskCategory {
   @JoinColumn({ name: 'task_id' })
   task!: TaskEntity;
 
-  @ManyToOne(() => Category, { onDelete: 'CASCADE' })
+  @ManyToOne(() => CategoryEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'category_id' })
-  category!: Category;
+  category!: CategoryEntity;
 }

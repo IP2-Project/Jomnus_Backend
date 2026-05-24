@@ -16,7 +16,9 @@ import { ConversationsService } from '@/conversations/conversations.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (process.env.CORS_ORIGINS || 'http://localhost:3000')
+      .split(',')
+      .map((origin) => origin.trim()),
     credentials: true,
   },
 })

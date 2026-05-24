@@ -1,8 +1,6 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
-import { Category } from '@/categories/entities/category.entity';
-import * as bcrypt from 'bcrypt';
-
+import { CategoryEntity } from '../categories/entities/category.entity';
 const seedDatabase = async () => {
   try {
     // Initialize database connection
@@ -11,8 +9,7 @@ const seedDatabase = async () => {
     }
 
     const userRepository = AppDataSource.getRepository(UserEntity);
-    const categoryRepository =
-      AppDataSource.getRepository(Category);
+    const categoryRepository = AppDataSource.getRepository(CategoryEntity);
 
     console.log('Starting database seed...');
 
@@ -75,6 +72,63 @@ const seedDatabase = async () => {
       },
     ];
 
+    const categories = [
+      {
+        name: 'Home Services',
+        description:
+          'Cleaning, plumbing, electrical, repair, and maintenance services',
+      },
+      {
+        name: 'Technology',
+        description: 'Software, IT, web, mobile, and technical services',
+      },
+      {
+        name: 'Design & Creative',
+        description:
+          'Graphic design, UI/UX, photography, video, and creative services',
+      },
+      {
+        name: 'Education',
+        description: 'Tutoring, mentoring, and educational services',
+      },
+      {
+        name: 'Business Services',
+        description:
+          'Accounting, legal, consulting, and administrative services',
+      },
+      {
+        name: 'Marketing',
+        description: 'Advertising, SEO, branding, and social media services',
+      },
+      {
+        name: 'Health & Wellness',
+        description: 'Fitness, beauty, massage, and wellness services',
+      },
+      {
+        name: 'Events & Entertainment',
+        description: 'Event planning, music, entertainment, and media services',
+      },
+      {
+        name: 'Transportation & Delivery',
+        description: 'Moving, logistics, transportation, and delivery services',
+      },
+      {
+        name: 'Personal Services',
+        description:
+          'Babysitting, elderly care, pet care, and personal assistance',
+      },
+      {
+        name: 'Construction & Property',
+        description:
+          'Architecture, interior design, construction, and renovation services',
+      },
+      {
+        name: 'Freelance & Remote Work',
+        description:
+          'Virtual assistant, writing, translation, and remote support services',
+      },
+    ];
+
     for (const userData of users) {
       const userExists = await userRepository.findOne({
         where: { email: userData.email },
@@ -99,65 +153,19 @@ const seedDatabase = async () => {
       }
     }
 
-    // =====================================================
-    // CATEGORIES
-    // =====================================================
-
-    const categories = [
-      {
-        name: 'Cleaning',
-        description: 'Cleaning and housekeeping services',
-      },
-      {
-        name: 'Delivery',
-        description: 'Food, parcel, and item delivery services',
-      },
-      {
-        name: 'Programming',
-        description: 'Software and web development tasks',
-      },
-      {
-        name: 'Design',
-        description: 'Graphic and UI/UX design tasks',
-      },
-      {
-        name: 'Tutoring',
-        description: 'Education and tutoring services',
-      },
-      {
-        name: 'Repair',
-        description: 'Repair and maintenance services',
-      },
-      {
-        name: 'Moving',
-        description: 'Moving and transportation assistance',
-      },
-    ];
-
     for (const categoryData of categories) {
       const categoryExists = await categoryRepository.findOne({
         where: { name: categoryData.name },
       });
 
       if (!categoryExists) {
-        const newCategory =
-          categoryRepository.create(categoryData);
-
+        const newCategory = categoryRepository.create(categoryData);
         await categoryRepository.save(newCategory);
-
-        console.log(
-          `Category created: ${categoryData.name}`,
-        );
-      } else {
-        console.log(
-          `Category already exists: ${categoryData.name}`,
-        );
+        console.log(`Category created: ${categoryData.name}`);
       }
     }
 
-    console.log(
-      'Database seeding completed successfully!',
-    );
+    console.log('Database seeding completed successfully!');
   } catch (error) {
     console.error('Error seeding database:', error);
 
