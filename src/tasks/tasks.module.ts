@@ -17,6 +17,7 @@ import { TaskApplicationEntity } from '@/applications/entities/task-application.
       TaskCategory,
       CategoryEntity,
       ConversationsEntity,
+      TaskApplicationEntity,
     ]),
     CategoriesModule,
   ],

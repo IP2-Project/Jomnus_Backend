@@ -1,6 +1,6 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
-// import { Category } from '@/categories/entities/category.entity';
+import { CategoryEntity } from '@/categories/entities/category.entity';
 import {
   TaskEntity,
   TaskStatus,
@@ -11,7 +11,6 @@ import {
   ApplicationStatus,
 } from '@/applications/entities/task-application.entity';
 import * as bcrypt from 'bcrypt';
-import { CategoryEntity } from '@/categories/entities/category.entity';
 
 const seedDatabase = async () => {
   try {
