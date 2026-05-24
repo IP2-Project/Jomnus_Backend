@@ -13,6 +13,7 @@ import type {
   Response as ExpressResponse,
 } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { LoginAuthDto } from './dto/login.dto';
 import { RegisterAuthDto } from './dto/register-auth.dto';
@@ -30,7 +31,10 @@ interface RequestWithUser extends ExpressRequest {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private configService: ConfigService,
+  ) {}
   private readonly cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -43,6 +47,57 @@ export class AuthController {
     sameSite: 'lax' as const,
     path: '/',
   };
+
+  private getFrontendUrl(): string {
+    const nodeEnv =
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.NODE_ENV ||
+      'development';
+
+    const appUrl = (this.configService.get<string>('APP_URL') || '').replace(
+      /\/+$/,
+      '',
+    );
+
+    const rawFrontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      process.env.FRONTEND_URL ||
+      '';
+
+    const sanitize = (value: string) => value.replace(/\/+$/, '');
+    const isLocalhost = (value: string) => /localhost|127\.0\.0\.1/i.test(value);
+
+    let frontendUrl = rawFrontendUrl ? sanitize(rawFrontendUrl) : '';
+
+    const corsOrigins = (
+      this.configService.get<string>('CORS_ORIGINS') ||
+      process.env.CORS_ORIGINS ||
+      ''
+    )
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const likelyProd =
+      nodeEnv === 'production' || (!!appUrl && !isLocalhost(appUrl));
+
+    if ((!frontendUrl || isLocalhost(frontendUrl)) && likelyProd) {
+      const firstNonLocalOrigin = corsOrigins.find((o) => !isLocalhost(o));
+      if (firstNonLocalOrigin) frontendUrl = sanitize(firstNonLocalOrigin);
+    }
+
+    if (!frontendUrl) {
+      frontendUrl = 'http://localhost:3000';
+    }
+
+    if (nodeEnv === 'production' && isLocalhost(frontendUrl)) {
+      throw new Error(
+        `Invalid FRONTEND_URL for production: ${frontendUrl}. Set FRONTEND_URL to your deployed web domain.`,
+      );
+    }
+
+    return frontendUrl;
+  }
 
   @Public()
   @Post('login')
@@ -179,10 +234,7 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(
-      /\/+$/,
-      '',
-    );
+    const frontendUrl = this.getFrontendUrl();
     const qs = new URLSearchParams({
       token: session.accessToken,
       role: session.user.role,
