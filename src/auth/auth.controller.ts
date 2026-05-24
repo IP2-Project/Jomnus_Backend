@@ -179,9 +179,16 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    return res.redirect(
-      `http://localhost:3000/auth/callback?token=${session.accessToken}&role=${session.user.role}`,
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(
+      /\/+$/,
+      '',
     );
+    const qs = new URLSearchParams({
+      token: session.accessToken,
+      role: session.user.role,
+    }).toString();
+
+    return res.redirect(`${frontendUrl}/auth/callback?${qs}`);
   }
 
   @Public()
