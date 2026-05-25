@@ -251,6 +251,19 @@ export class TasksService {
       longitude: dto.longitude,
     });
 
+    if (dto.categoryIds) {
+      await this.taskCategoryRepo.delete({ task_id: id });
+
+      if (dto.categoryIds.length) {
+        await this.taskCategoryRepo.save(
+          dto.categoryIds.map((categoryId) => ({
+            task_id: id,
+            category_id: categoryId,
+          })),
+        );
+      }
+    }
+
     return this.findOne(id);
   }
 
