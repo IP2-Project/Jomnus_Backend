@@ -18,10 +18,6 @@ import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
 import { RequesterStatsService } from '@/stats/requester-stats.service';
 import { PerformerStatsService } from '@/stats/performer-stats.service';
-<<<<<<< HEAD
-import { AssignmentStatus } from '@/assignments/entities/assignment.entity';
-=======
->>>>>>> efd7c1e (update on user, stats and task)
 
 @Injectable()
 export class UsersService {
@@ -37,7 +33,11 @@ export class UsersService {
 
     private statsService: StatsService,
 
+    // / ✅ FIXED: Added forwardRef injection hooks here
+    @Inject(forwardRef(() => RequesterStatsService))
     private requesterStatsService: RequesterStatsService,
+
+    @Inject(forwardRef(() => PerformerStatsService))
     private performerStatsService: PerformerStatsService,
 
     private dataSource: DataSource,
@@ -368,10 +368,7 @@ async BanUser(id: number, adminId: number) {
       .getOne();
 
     if (!user) return null;
-
-    // const requesterStats = await this.requesterStatsService.getByUserId(id);
-    // const performerStats = await this.performerStatsService.getByUserId(id);
-
+    
 
     if (user.identityVerifications) {
       user.identityVerifications = user.identityVerifications.map(v => ({
@@ -384,17 +381,16 @@ async BanUser(id: number, adminId: number) {
     // --- MAP THE VIRTUAL STATS HERE ---
     return {
       ...user,
-      tasks_posted: user.tasks?.length || 0,
-      tasks_verified: user.tasks?.filter(t => t.status === 'VERIFIED').length || 0,
-      total_spent: user.tasks?.reduce((sum, t) => sum + (Number(t.price) || 0), 0) || 0,
 
-      // ✅ ADD REVIEWS
-      reviews_given: user.reviewsGiven || [],
-      reviews_received: user.reviewsReceived || [],
+      // CamelCase variants (Matches your Entity Property naming conventions)
+      performerStats: user.performerStats || null,
+      requesterStats: user.requesterStats || null,
 
       // ✅ ADD STATS (optional but recommended)
       requester_stats: user.requesterStats || null,
       performer_stats: user.performerStats || null,
+
+    
       
     };
 
@@ -424,6 +420,7 @@ async BanUser(id: number, adminId: number) {
     });
 
     const savedUser = await this.usersRepository.save(user);
+    
     
     if (this.statsService) {
       await this.statsService.createInitialStats(savedUser);

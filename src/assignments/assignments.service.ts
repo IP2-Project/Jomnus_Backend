@@ -61,6 +61,9 @@ export class AssignmentsService {
             status: AssignmentStatus.IN_PROGRESS,
         });
 
+        // ✅ REFRESH 1: Recalculates performer's success rate and status changes
+        await this.performerStats.refresh(assignment.performer_id);
+
 
         return { message: 'Marked as in progress' };
     }
@@ -120,6 +123,9 @@ export class AssignmentsService {
             status: AssignmentStatus.COMPLETED,
         });
 
+        await this.performerStats.refresh(assignment.performer_id);
+
+
         const allAssignments = await this.assignRepo.find({
             where: {
                 task_id: assignment.task_id,
@@ -133,6 +139,7 @@ export class AssignmentsService {
         ).length;
         
         return { message: 'Marked as completed' };
+
         
     }
 
@@ -166,7 +173,6 @@ export class AssignmentsService {
         });
 
         await this.refreshTaskStatus(assignment.task_id);
-        
 
         console.log(`[verifyAssignment] assignment.id=${id} updated to VERIFIED, performer_id=${assignment.performer_id}, accepted_price=${assignment.accepted_price}`);
 
@@ -185,6 +191,11 @@ export class AssignmentsService {
                 status: TaskStatus.COMPLETED,
             });
         }
+
+        await this.performerStats.refresh(assignment.performer_id);
+        await this.requesterStats.refresh(task.requester_id);
+
+        
 
         return { message: 'Verified successfully' };
 
@@ -214,6 +225,9 @@ export class AssignmentsService {
             cancelled_by: user.id,
             cancelled_at: new Date(),
         });
+
+        // ✅ REFRESH 3: Recalculate performer metrics so cancellation hurts their success_rate
+        await this.performerStats.refresh(assignment.performer_id);
 
         return { message: 'Cancelled' };
     }

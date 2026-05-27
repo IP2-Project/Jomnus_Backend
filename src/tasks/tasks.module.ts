@@ -9,11 +9,14 @@ import { CategoriesModule } from '@/categories/categories.module';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
 import { StatsModule } from '@/stats/stats.module';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
+import { StatsModule } from '@/stats/stats.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([TaskEntity, TaskCategory, CategoryEntity, ConversationsEntity, TaskApplicationEntity]),
-        CategoriesModule
+
+        CategoriesModule,
+        StatsModule,
     ],
     controllers: [TasksController],
     providers: [TasksService],

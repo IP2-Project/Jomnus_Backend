@@ -48,8 +48,11 @@ export class TasksService {
             fullName: task.requester.fullName,
             email: task.requester.email,
             profileImage: task.requester.profileImage,
+            // 💥 ADD THIS: Now it will show up in your API response!
+            stats: task.requester.requesterStats || null,
           }
           : null,
+          
       ...(categories ? { categories } : {}),
     };
   }
@@ -92,7 +95,7 @@ export class TasksService {
       where: {
         status: TaskStatus.POSTED,
       },
-      relations: ['requester'],
+      relations: ['requester', 'requester.performerStats', 'requester.requesterStats'],
       order: { created_at: 'DESC' },
     });
 
@@ -188,7 +191,7 @@ export class TasksService {
   async findOne(id: number) {
     const task = await this.taskRepo.findOne({
       where: { id },
-      relations: ['requester'],
+      relations: ['requester', 'requester.performerStats', 'requester.requesterStats'],
     });
 
     if (!task) {

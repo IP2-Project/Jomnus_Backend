@@ -9,7 +9,7 @@ export class RequesterStats {
   @Column({ unique: true })
   user_id!: number;
 
-  @OneToOne(() => UserEntity)
+  @OneToOne(() => UserEntity, (user) => user.requesterStats, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 

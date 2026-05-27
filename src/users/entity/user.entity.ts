@@ -131,11 +131,9 @@ export class UserEntity extends BaseEntity {
   deletedAt?: Date;
 
   @OneToOne(() => PerformerStats, (stats) => stats.user)
-  @JoinColumn()
   performerStats!: PerformerStats;
 
   @OneToOne(() => RequesterStats, (stats) => stats.user)
-  @JoinColumn()
   requesterStats!: RequesterStats;
 
   @OneToMany(
@@ -149,6 +147,15 @@ export class UserEntity extends BaseEntity {
 
   @OneToMany(() => TaskAssignmentEntity, (assignment) => assignment.performer)
   assignments!: TaskAssignmentEntity[];
+
+  @OneToMany(() => TaskEntity, task => task.user)
+  tasks: TaskEntity[];
+
+  @OneToMany(() => Review, review => review.reviewer)
+reviewsGiven!: Review[];
+
+@OneToMany(() => Review, review => review.reviewee)
+reviewsReceived!: Review[];
 
   @BeforeInsert()
   @BeforeUpdate()

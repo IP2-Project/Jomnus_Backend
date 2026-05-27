@@ -81,6 +81,9 @@ export class TaskEntity {
   @OneToMany(() => TaskCategory, (tc) => tc.task)
   taskCategories!: TaskCategory[];
 
+  @ManyToOne(() => UserEntity, user => user.tasks, { nullable: true })
+  user: UserEntity;
+
   // ================= TIMESTAMP =================
 
   @CreateDateColumn({ name: 'created_at' })
