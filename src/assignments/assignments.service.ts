@@ -5,8 +5,6 @@ import { Repository } from 'typeorm';
 import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 import { TaskEntity, TaskStatus } from '@/tasks/entities/task.entity';
-import { PerformerStatsService } from '@/stats/performer-stats.service';
-import { RequesterStatsService } from '@/stats/requester-stats.service';
 
 @Injectable()
 export class AssignmentsService {
@@ -16,8 +14,6 @@ export class AssignmentsService {
         @InjectRepository(TaskEntity)
         private taskRepo: Repository<TaskEntity>,
 
-        private readonly performerStats: PerformerStatsService,
-        private readonly requesterStats: RequesterStatsService,
 
     ) {}
 
@@ -62,7 +58,7 @@ export class AssignmentsService {
         });
 
         // ✅ REFRESH 1: Recalculates performer's success rate and status changes
-        await this.performerStats.refresh(assignment.performer_id);
+        // await this.performerStats.refresh(assignment.performer_id);
 
 
         return { message: 'Marked as in progress' };
@@ -122,9 +118,6 @@ export class AssignmentsService {
         await this.assignRepo.update(id, {
             status: AssignmentStatus.COMPLETED,
         });
-
-        await this.performerStats.refresh(assignment.performer_id);
-
 
         const allAssignments = await this.assignRepo.find({
             where: {
@@ -191,13 +184,8 @@ export class AssignmentsService {
                 status: TaskStatus.COMPLETED,
             });
         }
-
-        await this.performerStats.refresh(assignment.performer_id);
-        await this.requesterStats.refresh(task.requester_id);
-
-        
-
-        return { message: 'Verified successfully' };
+    
+    return { message: 'Verified successfully' };
 
         
     }
@@ -225,9 +213,6 @@ export class AssignmentsService {
             cancelled_by: user.id,
             cancelled_at: new Date(),
         });
-
-        // ✅ REFRESH 3: Recalculate performer metrics so cancellation hurts their success_rate
-        await this.performerStats.refresh(assignment.performer_id);
 
         return { message: 'Cancelled' };
     }

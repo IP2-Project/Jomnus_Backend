@@ -1,5 +1,6 @@
-import { Column, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 import { UserEntity } from "@/users/entity/user.entity";
+import { TaskEntity } from "@/tasks/entities/task.entity";
 
 @Entity('requester_stats')
 export class RequesterStats {

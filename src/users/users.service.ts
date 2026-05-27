@@ -16,8 +16,6 @@ import { AuditLogEntity } from '@/identity-verifications/entities/audit-log.enti
 import { IdentityVerificationsService } from '@/identity-verifications/identity-verifications.service';
 import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
-import { RequesterStatsService } from '@/stats/requester-stats.service';
-import { PerformerStatsService } from '@/stats/performer-stats.service';
 
 @Injectable()
 export class UsersService {
@@ -32,13 +30,6 @@ export class UsersService {
     private auditLogRepository: Repository<AuditLogEntity>,
 
     private statsService: StatsService,
-
-    // / ✅ FIXED: Added forwardRef injection hooks here
-    @Inject(forwardRef(() => RequesterStatsService))
-    private requesterStatsService: RequesterStatsService,
-
-    @Inject(forwardRef(() => PerformerStatsService))
-    private performerStatsService: PerformerStatsService,
 
     private dataSource: DataSource,
 
