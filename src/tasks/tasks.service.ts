@@ -66,13 +66,7 @@ export class TasksService {
       location_text: dto.locationText,
       latitude: dto.latitude,
       longitude: dto.longitude,
-    });
-  
-
-     // 🔥 ADD THIS (IMPORTANT)
-    await this.requesterStatsService.incrementTasksPosted(userId);
-    await this.performerStatsService.incrementCompletedTasks(userId); 
-    
+    });  
 
     if (dto.categoryIds?.length) {
       const taskCategories = dto.categoryIds.map((categoryId) => ({
