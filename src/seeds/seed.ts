@@ -181,6 +181,7 @@ const seedDatabase = async () => {
         const newCategory = categoryRepository.create(categoryData);
         await categoryRepository.save(newCategory);
 
+
         console.log(
           `Category created: ${categoryData.name}`,
         );
@@ -301,9 +302,7 @@ for (const appData of applications) {
   }
 }
 
-    console.log(
-      'Database seeding completed successfully!',
-    );
+    console.log('Database seeding completed successfully!');
   } catch (error) {
     console.error('Error seeding database:', error);
 
