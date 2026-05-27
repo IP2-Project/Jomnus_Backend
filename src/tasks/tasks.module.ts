@@ -7,7 +7,6 @@ import { TaskCategory } from '@/categories/entities/task-category.entity';
 import { CategoryEntity } from '@/categories/entities/category.entity';
 import { CategoriesModule } from '@/categories/categories.module';
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
-import { StatsModule } from '@/stats/stats.module';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 import { StatsModule } from '@/stats/stats.module';
 
