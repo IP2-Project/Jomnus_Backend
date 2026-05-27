@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   HttpException,
   NotFoundException,
+  Post,
 } from '@nestjs/common';
 import { StatsService } from './stats.service';
 import { UsersService } from '@/users/users.service'; // Add this import
@@ -18,6 +19,13 @@ export class StatsController {
     private readonly statsService: StatsService,
     private readonly usersService: UsersService, // Inject UsersService
   ) {}
+
+   // ✅ Add this endpoint
+  @Post('refresh')
+  async refreshAll() {
+    await this.statsService.refreshAllStats();
+    return { message: 'Stats refreshed' };
+  }
 
   @Get('performer/:userId')
   async getPerformerStats(@Param('userId', ParseIntPipe) userId: number) {

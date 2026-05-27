@@ -12,7 +12,9 @@ export class AssignmentsService {
         @InjectRepository(TaskAssignmentEntity)
         private assignRepo: Repository<TaskAssignmentEntity>,
         @InjectRepository(TaskEntity)
-        private taskRepo: Repository<TaskEntity>
+        private taskRepo: Repository<TaskEntity>,
+
+
     ) {}
 
     create(taskId: number, performerId: number,  applicationId: number, price: number) {
@@ -54,6 +56,9 @@ export class AssignmentsService {
         await this.assignRepo.update(id, {
             status: AssignmentStatus.IN_PROGRESS,
         });
+
+        // ✅ REFRESH 1: Recalculates performer's success rate and status changes
+        // await this.performerStats.refresh(assignment.performer_id);
 
 
         return { message: 'Marked as in progress' };
@@ -125,9 +130,10 @@ export class AssignmentsService {
                 a.status === AssignmentStatus.COMPLETED ||
                 a.status === AssignmentStatus.VERIFIED,
         ).length;
-
-
+        
         return { message: 'Marked as completed' };
+
+        
     }
 
     async verifyAssignment(id: number, user: UserEntity) {
@@ -161,6 +167,7 @@ export class AssignmentsService {
 
         await this.refreshTaskStatus(assignment.task_id);
 
+        console.log(`[verifyAssignment] assignment.id=${id} updated to VERIFIED, performer_id=${assignment.performer_id}, accepted_price=${assignment.accepted_price}`);
 
         const allAssignments = await this.assignRepo.find({
             where: {
@@ -177,8 +184,10 @@ export class AssignmentsService {
                 status: TaskStatus.COMPLETED,
             });
         }
+    
+    return { message: 'Verified successfully' };
 
-        return { message: 'Verified successfully' };
+        
     }
 
 
@@ -257,6 +266,7 @@ export class AssignmentsService {
         await this.taskRepo.update(taskId, {
             status: TaskStatus.COMPLETED,
         });
-    }
+
+     }
 
 }

@@ -17,6 +17,7 @@ import { IdentityVerificationsService } from '@/identity-verifications/identity-
 import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
 
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -349,11 +350,21 @@ async BanUser(id: number, adminId: number) {
     
     const user = await this.usersRepository.createQueryBuilder('user')
       .leftJoinAndSelect('user.identityVerifications', 'verification')
+      .leftJoinAndSelect('user.tasks', 'tasks') // Pull the tasks from the DB
+      .leftJoinAndSelect('user.reviewsGiven', 'reviewsGiven')
+      .leftJoinAndSelect('user.reviewsReceived', 'reviewsReceived')
+      .leftJoinAndSelect('user.performerStats', 'performerStats')
+      .leftJoinAndSelect('user.requesterStats', 'requesterStats')
       .where('user.id = :id', { id })
       .orderBy('verification.id', 'DESC')
       .getOne();
 
     if (!user) return null;
+    
+
+    // const requesterStats = await this.requesterStatsService.getByUserId(id);
+    // const performerStats = await this.performerStatsService.getByUserId(id);
+
 
     if (user.identityVerifications) {
       user.identityVerifications = user.identityVerifications.map(v => ({
@@ -363,7 +374,23 @@ async BanUser(id: number, adminId: number) {
       }));
     }
 
-    return user;
+    // --- MAP THE VIRTUAL STATS HERE ---
+    return {
+      ...user,
+
+      // CamelCase variants (Matches your Entity Property naming conventions)
+      performerStats: user.performerStats || null,
+      requesterStats: user.requesterStats || null,
+
+      // ✅ ADD STATS (optional but recommended)
+      requester_stats: user.requesterStats || null,
+      performer_stats: user.performerStats || null,
+
+    
+      
+    };
+
+    // return user;
   }
 
   async findAll(): Promise<UserEntity[]> {
@@ -389,6 +416,7 @@ async BanUser(id: number, adminId: number) {
     });
 
     const savedUser = await this.usersRepository.save(user);
+    
     
     if (this.statsService) {
       await this.statsService.createInitialStats(savedUser);

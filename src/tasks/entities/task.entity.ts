@@ -35,8 +35,13 @@ export class TaskEntity {
   @Column()
   requester_id!: number;
 
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'requester_id' })
+  // @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  // @JoinColumn({ name: 'requester_id' })
+  // requester!: UserEntity;
+
+   // tasks/entities/task.entity.ts
+  @ManyToOne(() => UserEntity, (user) => user.tasks, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'requester_id' }) // This must match your DB column name exactly
   requester!: UserEntity;
 
   @Column('float')
@@ -66,6 +71,7 @@ export class TaskEntity {
 
   @Column({ type: 'float', nullable: true })
   longitude!: number;
+  
 
   // ================= RELATIONS =================
 
@@ -74,6 +80,9 @@ export class TaskEntity {
 
   @OneToMany(() => TaskCategory, (tc) => tc.task)
   taskCategories!: TaskCategory[];
+
+  @ManyToOne(() => UserEntity, user => user.tasks, { nullable: true })
+  user: UserEntity;
 
   // ================= TIMESTAMP =================
 

@@ -191,6 +191,7 @@ export class IdentityVerificationsService {
       if (!verification) throw new NotFoundException('Request not found');
       if (!verification.user) throw new BadRequestException('No user linked.');
 
+      // --- UPDATED STRICT VALIDATION CHECK ---
       if (dto.status === VerificationStatus.APPROVED) {
         const isCardMissing = !verification.id_card_url || verification.id_card_url.trim() === '';
         const isSelfieMissing = !verification.selfie_url || verification.selfie_url.trim() === '';
