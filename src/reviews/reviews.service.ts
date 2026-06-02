@@ -82,7 +82,7 @@ export class ReviewsService {
       comment: review.comment,
       created_at: review.created_at,
       assignment_id: review.assignment_id,
-
+      reviewer_id: review.reviewer_id,        // ← add this
       // ✅ FIX: flatten relation
       reviewerName: review.reviewer?.fullName || 'Unknown',
       reviewerImage: review.reviewer?.profileImage || null,
@@ -121,7 +121,7 @@ export class ReviewsService {
       comment: review.comment,
       created_at: review.created_at,
       assignment_id: review.assignment_id,
-
+      reviewer_id: review.reviewer_id,        // ← add this
       reviewerName: review.reviewer?.fullName,
       revieweeName: review.reviewee?.fullName,
     }));
