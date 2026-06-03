@@ -222,7 +222,7 @@ export class ApplicationsService {
       application.offered_price,
     );
 
-    await this.conversationsService.createConversation(task.id, user.id);
+    // await this.conversationsService.createConversation(task.id, user.id);
 
     await this.notificationsService.notifyApplicationAccepted(
       application.performer_id,

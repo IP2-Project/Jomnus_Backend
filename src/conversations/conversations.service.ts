@@ -30,9 +30,6 @@ export class ConversationsService {
     private readonly userRepository: Repository<UserEntity>,
   ) {}
 
-  // =========================
-  // 🔒 SAFE NUMBER GUARD
-  // =========================
   private toValidId(value: any, name: string): number {
     const id = Number(value);
 
@@ -113,8 +110,6 @@ export class ConversationsService {
   }
 
   async getMyConversations(userId: number) {
-    userId = this.toValidId(userId, 'userId');
-
     const requesterTasks = await this.taskRepository.find({
       where: { requester_id: userId },
     });
@@ -124,9 +119,8 @@ export class ConversationsService {
     });
 
     const taskIds = new Set<number>();
-
-    requesterTasks.forEach((t) => taskIds.add(t.id));
-    assignments.forEach((a) => taskIds.add(a.task_id));
+    requesterTasks.forEach((task) => taskIds.add(task.id));
+    assignments.forEach((assignment) => taskIds.add(assignment.task_id));
 
     if (taskIds.size === 0) return [];
 
@@ -136,10 +130,22 @@ export class ConversationsService {
       order: { created_at: 'DESC' },
     });
 
-    return Promise.all(
+    const detailed = await Promise.all(
       conversations.map((c) => this.getConversationById(c.id, userId)),
     );
+
+    const seen = new Map<string, (typeof detailed)[0]>();
+    for (const conv of detailed) {
+      const key = conv.participantId ? String(conv.participantId) : null;
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.set(key, conv); // first = most recent because order: DESC
+      }
+    }
+
+    return [...seen.values()];
   }
+
 
   async ensureConversationAccess(conversationId: number, userId: number) {
     conversationId = this.toValidId(conversationId, 'conversationId');
