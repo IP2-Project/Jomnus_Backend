@@ -194,4 +194,9 @@ export class adminController {
       approvedVerifications: verificationList.filter((v: any) => v.status === 'APPROVED').length,
     };
   }
+
+  @Get('dashboard/user-growth')
+  async getUserGrowth(@Query('period') period: 'Daily' | 'Weekly' | 'Monthly' = 'Daily') {
+    return await this.adminServices.getUserGrowth(period);
+  }
 }

@@ -9,6 +9,7 @@ import { UsersModule } from '@/users/users.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
 import { forwardRef } from '@nestjs/common';
 import { ConversationsModule } from '@/conversations/conversations.module';
+import { ApplicationsGateway } from './applications.gateway';
 
 @Module({
   imports: [
@@ -20,6 +21,6 @@ import { ConversationsModule } from '@/conversations/conversations.module';
     forwardRef(() => ConversationsModule)
   ],
   controllers: [ApplicationsController],
-  providers: [ApplicationsService],
+  providers: [ApplicationsService, ApplicationsGateway],
 })
 export class ApplicationsModule {}

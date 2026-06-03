@@ -29,6 +29,8 @@ const seedDatabase = async () => {
       AppDataSource.getRepository(
         TaskApplicationEntity,
       );
+    const usersByEmail = new Map<string, UserEntity>();
+    const tasksByTitle = new Map<string, TaskEntity>();
 
     console.log('Starting database seed...');
 
@@ -54,9 +56,11 @@ const seedDatabase = async () => {
       });
 
       await userRepository.save(adminUser);
+      usersByEmail.set(adminUser.email, adminUser);
 
       console.log('Admin user created');
     } else {
+      usersByEmail.set(adminExists.email, adminExists);
       console.log('Admin user already exists');
     }
 
@@ -165,9 +169,11 @@ const seedDatabase = async () => {
         });
 
         await userRepository.save(newUser);
+        usersByEmail.set(newUser.email, newUser);
 
         console.log(`User created: ${userData.email}`);
       } else {
+        usersByEmail.set(userExists.email, userExists);
         console.log(`User already exists: ${userData.email}`);
       }
     }
@@ -255,29 +261,55 @@ if (requester) {
       await taskRepository.save(
         task,
       );
+      tasksByTitle.set(task.title, task);
 
       console.log(
         `Task created: ${task.title}`,
       );
+    } else {
+      tasksByTitle.set(exists.title, exists);
     }
   }
 }
 // ================= APPLICATIONS =================
 
+const performer = usersByEmail.get(
+  'john.doe@jomnus.com',
+);
+const taskOne = tasksByTitle.get(
+  'Luxury Penthouse UI Redesign',
+);
+const taskTwo = tasksByTitle.get(
+  'E-commerce API Integration',
+);
+
 const applications = [
-  {
-    task_id: 1,
-    performer_id: 1,
-    offered_price: 4200,
-    status: ApplicationStatus.PENDING,
-  },
-  {
-    task_id: 2,
-    performer_id: 1,
-    offered_price: 1850,
-    status: ApplicationStatus.ACCEPTED,
-  },
-];
+  performer && taskOne
+    ? {
+        task_id: taskOne.id,
+        performer_id: performer.id,
+        offered_price: 4200,
+        status: ApplicationStatus.PENDING,
+      }
+    : null,
+  performer && taskTwo
+    ? {
+        task_id: taskTwo.id,
+        performer_id: performer.id,
+        offered_price: 1850,
+        status: ApplicationStatus.ACCEPTED,
+      }
+    : null,
+].filter(
+  (
+    appData,
+  ): appData is {
+    task_id: number;
+    performer_id: number;
+    offered_price: number;
+    status: ApplicationStatus;
+  } => appData !== null,
+);
 
 for (const appData of applications) {
   const exists =
