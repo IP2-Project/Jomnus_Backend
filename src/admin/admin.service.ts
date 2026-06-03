@@ -1,5 +1,5 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { UserEntity } from '@/users/entity/user.entity';
+import { UserEntity, UserRole } from '@/users/entity/user.entity';
 import {
   TaskAssignmentEntity,
   AssignmentStatus,
@@ -40,6 +40,50 @@ export class adminServices {
   
   async getAllUser() {
     return await this.UserRepository.find();
+  }
+
+  async getUserGrowth(period: 'Daily' | 'Weekly' | 'Monthly' = 'Daily') {
+    const normalizedPeriod = period === 'Monthly' ? 'Monthly' : period === 'Weekly' ? 'Weekly' : 'Daily';
+    const unit = normalizedPeriod === 'Daily' ? 'day' : normalizedPeriod === 'Weekly' ? 'week' : 'month';
+    const bucketCount = normalizedPeriod === 'Daily' ? 7 : 6;
+    const now = new Date();
+    const startDate = this.getGrowthStartDate(normalizedPeriod, now);
+
+    const rows = await this.UserRepository.createQueryBuilder('user')
+      .select(`date_trunc('${unit}', user.createdAt)`, 'bucket')
+      .addSelect('COUNT(*)', 'count')
+      .where('user.currentRole != :adminRole', { adminRole: UserRole.ADMIN })
+      .andWhere('user.createdAt >= :startDate', { startDate })
+      .groupBy('bucket')
+      .orderBy('bucket', 'ASC')
+      .getRawMany();
+
+    const rowMap = new Map<string, number>();
+    for (const row of rows) {
+      const key = this.normalizeGrowthBucket(new Date(row.bucket), normalizedPeriod);
+      rowMap.set(key, Number(row.count));
+    }
+
+    const data = Array.from({ length: bucketCount }, (_, index) => {
+      const bucketDate = this.shiftGrowthBucket(startDate, normalizedPeriod, index);
+      const key = this.normalizeGrowthBucket(bucketDate, normalizedPeriod);
+      return {
+        name: this.formatGrowthLabel(bucketDate, normalizedPeriod),
+        value: rowMap.get(key) ?? 0,
+      };
+    });
+
+    const peak = data.reduce<{ name: string; value: number } | null>(
+      (best, current) => (!best || current.value > best.value ? current : best),
+      null,
+    );
+
+    return {
+      period: normalizedPeriod,
+      total: data.reduce((sum, item) => sum + item.value, 0),
+      peak,
+      data,
+    };
   }
 
   // ============ TASK MANAGEMENT ============
@@ -231,5 +275,71 @@ async paginateUsers(page: number, limit: number, search?: string, role?: string,
       page,
       last_page: Math.ceil(total / limit),
     };
+  }
+
+  private getGrowthStartDate(period: 'Daily' | 'Weekly' | 'Monthly', now: Date) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+
+    if (period === 'Daily') {
+      start.setDate(start.getDate() - 6);
+      return start;
+    }
+
+    if (period === 'Weekly') {
+      const day = start.getDay();
+      const diffToMonday = (day + 6) % 7;
+      start.setDate(start.getDate() - diffToMonday - (5 * 7));
+      return start;
+    }
+
+    start.setDate(1);
+    start.setMonth(start.getMonth() - 5);
+    return start;
+  }
+
+  private shiftGrowthBucket(startDate: Date, period: 'Daily' | 'Weekly' | 'Monthly', index: number) {
+    const date = new Date(startDate);
+    if (period === 'Daily') {
+      date.setDate(date.getDate() + index);
+      return date;
+    }
+
+    if (period === 'Weekly') {
+      date.setDate(date.getDate() + index * 7);
+      return date;
+    }
+
+    date.setMonth(date.getMonth() + index);
+    return date;
+  }
+
+  private normalizeGrowthBucket(date: Date, period: 'Daily' | 'Weekly' | 'Monthly') {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+
+    if (period === 'Weekly') {
+      const day = normalized.getDay();
+      const diffToMonday = (day + 6) % 7;
+      normalized.setDate(normalized.getDate() - diffToMonday);
+    }
+
+    if (period === 'Monthly') {
+      normalized.setDate(1);
+    }
+
+    return normalized.toISOString();
+  }
+
+  private formatGrowthLabel(date: Date, period: 'Daily' | 'Weekly' | 'Monthly') {
+    if (period === 'Daily') {
+      return date.toLocaleDateString('en-US', { weekday: 'short' });
+    }
+
+    if (period === 'Weekly') {
+      return `Wk ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+
+    return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }
 }

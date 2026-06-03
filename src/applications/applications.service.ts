@@ -11,6 +11,7 @@ import { UsersService } from '@/users/users.service';
 import { UserEntity } from '@/users/entity/user.entity';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { ConversationsService } from '@/conversations/conversations.service';
+import { ApplicationsGateway } from './applications.gateway';
 
 @Injectable()
 export class ApplicationsService {
@@ -22,6 +23,7 @@ export class ApplicationsService {
     private userService: UsersService,
     private notificationsService: NotificationsService,
     private conversationsService: ConversationsService, // ← must be here
+    private applicationsGateway: ApplicationsGateway,
   ) {}
 
   async create(dto: CreateApplicationDto, userId: number) {
@@ -82,6 +84,15 @@ export class ApplicationsService {
         task.id,
       );
     }
+
+    this.applicationsGateway.emitApplicationsUpdate({
+      type: 'created',
+      applicationId: saved.id,
+      taskId: task.id,
+      status: ApplicationStatus.PENDING,
+      message: 'New application created',
+    });
+
     return applicationWithPerformer;
   }
 
@@ -142,6 +153,14 @@ export class ApplicationsService {
       status: ApplicationStatus.REJECTED,
     });
 
+    this.applicationsGateway.emitApplicationsUpdate({
+      type: 'rejected',
+      applicationId,
+      taskId: task.id,
+      status: ApplicationStatus.REJECTED,
+      message: 'Application rejected',
+    });
+
     return { message: 'Application rejected' };
   }
 
@@ -168,6 +187,14 @@ export class ApplicationsService {
 
     await this.appRepo.update(applicationId, {
       status: ApplicationStatus.CANCELLED,
+    });
+
+    this.applicationsGateway.emitApplicationsUpdate({
+      type: 'cancelled',
+      applicationId,
+      taskId: application.task_id,
+      status: ApplicationStatus.CANCELLED,
+      message: 'Application cancelled',
     });
 
     return { message: 'Application cancelled' };
@@ -230,6 +257,14 @@ export class ApplicationsService {
       task.id,
     );
 
+    this.applicationsGateway.emitApplicationsUpdate({
+      type: 'accepted',
+      applicationId,
+      taskId: task.id,
+      status: ApplicationStatus.ACCEPTED,
+      message: 'Application accepted',
+    });
+
     return { message: 'Application accepted' };
   }
 
@@ -262,6 +297,13 @@ export class ApplicationsService {
       .where('task_id = :taskId', { taskId })
       .andWhere('status = :status', { status: ApplicationStatus.PENDING })
       .execute();
+
+    this.applicationsGateway.emitApplicationsUpdate({
+      type: 'bulk_rejected',
+      taskId,
+      status: ApplicationStatus.REJECTED,
+      message: 'Remaining pending applications rejected',
+    });
 
     return { message: 'Remaining applications rejected' };
   }
