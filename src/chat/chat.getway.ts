@@ -6,6 +6,7 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsException,
 } from '@nestjs/websockets';
 import { Injectable } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
@@ -22,6 +23,7 @@ import { ConversationsService } from '@/conversations/conversations.service';
     credentials: true,
   },
 })
+
 @Injectable()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -81,33 +83,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data: { conversationId: body.conversationId },
     };
   }
-
+  
   @SubscribeMessage('message:send')
-  async sendMessage(
+  async handleMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { conversationId: number; message: string },
+    @MessageBody() data: { conversationId: number; message: string },
   ) {
+    const userId = client.data.userId;
+    if (!userId) throw new WsException('Unauthorized');
+
     try {
-      const userId = client.data.user.id;
 
       const savedMessage = await this.messagesService.createMessage(
         userId,
-        body.conversationId,
-        body.message,
+        data.conversationId,
+        data.message ?? '',
       );
-
       this.server
-        .to(`conversation_${body.conversationId}`)
+        .to(`conversation:${data.conversationId}`)
         .emit('message:new', savedMessage);
 
-      return {
-        event: 'message:sent',
-        data: savedMessage,
-      };
-    } catch (error: any) {
-      client.emit('chat:error', {
-        message: error.message || 'Failed to send message',
-      });
+      return { event: 'message:sent', data: savedMessage };
+    } catch (err: any) {
+      return { event: 'chat:error', data: { message: err.message } };
     }
   }
+  
+  
 }

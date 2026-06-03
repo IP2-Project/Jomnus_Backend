@@ -25,6 +25,7 @@ import { StatsModule } from './stats/stats.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { MessagesModule } from './messages/messages.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -61,7 +62,8 @@ import { MessagesModule } from './messages/messages.module';
     StatsModule,
     NotificationsModule,
     AdminModule,
-    MessagesModule
+    MessagesModule,
+    ChatModule
   ],
   controllers: [AppController],
   providers: [AppService],

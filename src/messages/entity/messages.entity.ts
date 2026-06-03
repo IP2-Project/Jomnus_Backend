@@ -17,6 +17,9 @@ export class MessageEntity {
   @Column()
   conversation_id!: number;
 
+  @Column({ nullable: true })
+  image_url?: string;
+
   @ManyToOne(
     () => ConversationsEntity,
     (conversation) => conversation.messages,
