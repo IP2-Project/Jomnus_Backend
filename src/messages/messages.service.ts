@@ -1,52 +1,60 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { MessageEntity } from './entity/messages.entity';
 import { ConversationsService } from '@/conversations/conversations.service';
-import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 
 @Injectable()
 export class MessagesService {
   constructor(
     @InjectRepository(MessageEntity)
     private readonly messageRepository: Repository<MessageEntity>,
+
     @Inject(forwardRef(() => ConversationsService))
     private conversationsService: ConversationsService,
   ) {}
 
-  async createMessage(senderId: number, conversationId: number, text: string) {
-    const messageText = text.trim();
-    if (!messageText) {
-      throw new BadRequestException('Message text cannot be empty');
-    }
-
+  async createMessage(
+    senderId: number,
+    conversationId: number,
+    message: string,
+    imageUrl?: string,
+  ) {
     const conversation =
       await this.conversationsService.ensureConversationAccess(
         conversationId,
         senderId,
       );
 
-    const message = this.messageRepository.create({
-      conversation_id: conversation.id,
+    const text = message?.trim();
+
+    if (!text && !imageUrl) {
+      throw new BadRequestException('Message cannot be empty');
+    }
+
+    const newMessage = this.messageRepository.create({
+      conversation_id: Number(conversationId),
       sender_id: senderId,
-      message: messageText,
+      message: text || '',
+      image_url: imageUrl,
     });
 
-    await this.messageRepository.save(message);
-
-    return this.messageRepository.findOne({
-      where: { id: message.id },
-      relations: ['sender'],
-    });
+    return await this.messageRepository.save(newMessage);
   }
 
-  async getMessages(converstionId: number, userId: number) {
+  async getMessages(conversationId: number, userId: number) {
     await this.conversationsService.ensureConversationAccess(
-      converstionId,
+      conversationId,
       userId,
     );
 
     return this.messageRepository.find({
-      where: { conversation_id: converstionId },
+      where: { conversation_id: conversationId },
       relations: ['sender'],
       order: { created_at: 'ASC' },
     });
