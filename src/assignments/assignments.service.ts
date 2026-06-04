@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
@@ -217,6 +217,27 @@ export class AssignmentsService {
         return { message: 'Cancelled' };
     }
 
+    // assignments.service.ts
+    async getCompletedWorkHistory(userId: number) {
+    const assignments = await this.assignRepo.find({ // ← assignRepo not assignmentRepository
+        where: {
+        performer_id: userId,
+        status: In([AssignmentStatus.COMPLETED, AssignmentStatus.VERIFIED]), // ← use enum
+        },
+        relations: ['task', 'task.requester'], // ← load task and requester for display
+        order: { created_at: 'DESC' }, // ← created_at, no updated_at in your entity
+    });
+
+    return assignments.map((a) => ({
+        id: a.id,
+        title: a.task?.title ?? 'Untitled Task',
+        description: a.task?.description ?? '',
+        tag: 'Completed Task',             // ← no category field in your task entity
+        price: a.accepted_price,           // ← snake_case to match entity
+        completedAt: a.created_at,
+        requesterName: a.task?.requester?.fullName ?? 'Unknown',
+    }));
+    }
 
     private async refreshTaskStatus(taskId: number) {
         const assignments = await this.assignRepo.find({
