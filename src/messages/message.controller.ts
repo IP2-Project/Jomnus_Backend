@@ -13,14 +13,16 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { MessagesService } from './messages.service';
+import { ChatGateway } from '@/chat/chat.getway';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessageController {
-  constructor(private readonly messagesService: MessagesService) {}
-
-
+  constructor(
+    private readonly messagesService: MessagesService,
+    private readonly chatGateway: ChatGateway, // ← inject gateway
+  ) {}
 
   @Post()
   @UseInterceptors(
@@ -35,8 +37,6 @@ export class MessageController {
       }),
     }),
   )
-
-
   async sendMessage(
     @Req() req: any,
     @Body() dto: any,
@@ -44,15 +44,21 @@ export class MessageController {
   ) {
     const imageUrl = file ? `/uploads/messages/${file.filename}` : undefined;
 
-    return this.messagesService.createMessage(
+    const saved = await this.messagesService.createMessage(
       req.user.id,
       Number(dto.conversationId),
       dto.message,
       imageUrl,
     );
 
-  }
+    const full = await this.messagesService.getMessageById(saved.id);
 
+    this.chatGateway.server
+      .to(`conversation_${dto.conversationId}`)
+      .emit('message:new', full);
+
+    return full;
+  }
 
   @Get(':conversationId')
   getMessages(@Req() req: any, @Param('conversationId') id: string) {

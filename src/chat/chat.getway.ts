@@ -8,12 +8,13 @@ import {
   WebSocketServer,
   WsException,
 } from '@nestjs/websockets';
-import { Injectable } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { MessagesService } from '@/messages/messages.service';
 import { ConversationsService } from '@/conversations/conversations.service';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { MessagesService } from '@/messages/messages.service';
+
 
 @WebSocketGateway({
   cors: {
@@ -27,12 +28,14 @@ import { ConversationsService } from '@/conversations/conversations.service';
 @Injectable()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server!: Server;
+  public server!: Server;
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => MessagesService))
     private readonly messagesService: MessagesService,
+    @Inject(forwardRef(() => ConversationsService)) // ← forwardRef here too
     private readonly conversationsService: ConversationsService,
   ) {}
 
@@ -54,7 +57,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.data.user = {
         id: Number((payload as any).sub),
         email: (payload as any).email,
-        // role: (payload as any).role,
         role: (payload as any).currentRole || (payload as any).role,
       };
     } catch {
@@ -69,7 +71,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { conversationId: number },
   ) {
-    const userId = client.data.user.id;
+    const userId = client.data.user?.id;
+    if (!userId) throw new WsException('Unauthorized');
 
     await this.conversationsService.ensureConversationAccess(
       body.conversationId,
@@ -83,31 +86,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data: { conversationId: body.conversationId },
     };
   }
-  
+
   @SubscribeMessage('message:send')
   async handleMessage(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: number; message: string },
   ) {
-    const userId = client.data.userId;
+    const userId = client.data.user?.id; // ← fix: was client.data.userId, should be client.data.user.id
     if (!userId) throw new WsException('Unauthorized');
 
     try {
-
-      const savedMessage = await this.messagesService.createMessage(
+      const saved = await this.messagesService.createMessage(
         userId,
         data.conversationId,
         data.message ?? '',
+        undefined,
       );
-      this.server
-        .to(`conversation:${data.conversationId}`)
-        .emit('message:new', savedMessage);
 
-      return { event: 'message:sent', data: savedMessage };
+      const full = await this.messagesService.getMessageById(saved.id);
+
+      this.server
+        .to(`conversation_${data.conversationId}`)
+        .emit('message:new', full);
+
+      return { event: 'message:sent', data: full };
     } catch (err: any) {
       return { event: 'chat:error', data: { message: err.message } };
     }
   }
-  
-  
 }
