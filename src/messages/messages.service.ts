@@ -59,4 +59,14 @@ export class MessagesService {
       order: { created_at: 'ASC' },
     });
   }
+
+
+  async getMessageById(id: number) {
+    return this.messageRepository.findOne({
+      where: { id },
+      relations: ['sender'],
+    });
+  }
+
+
 }
