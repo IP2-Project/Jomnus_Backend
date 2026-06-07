@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { ConversationsService } from '@/conversations/conversations.service';
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { MessagesService } from '@/messages/messages.service';
+import { MessageType } from '@/messages/entity/messages.entity';
 
 
 @WebSocketGateway({
@@ -59,6 +60,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         email: (payload as any).email,
         role: (payload as any).currentRole || (payload as any).role,
       };
+
+      client.join(`user_${client.data.user.id}`);
     } catch {
       client.disconnect();
     }
@@ -101,6 +104,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.conversationId,
         data.message ?? '',
         undefined,
+        MessageType.TEXT
       );
 
       const full = await this.messagesService.getMessageById(saved.id);
@@ -112,6 +116,75 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { event: 'message:sent', data: full };
     } catch (err: any) {
       return { event: 'chat:error', data: { message: err.message } };
+    }
+  }
+
+  @SubscribeMessage('conversation:leave')
+  async leaveConversation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { conversationId: number },
+  ) {
+    const userId = client.data.user?.id;
+    if (!userId) throw new WsException('Unauthorized');
+
+    client.leave(`conversation_${body.conversationId}`);
+
+    return {
+      event: 'conversation:left',
+      data: { conversationId: body.conversationId },
+    };
+  }
+
+  @SubscribeMessage('call:initiate')
+  async handleCallInitiate(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: number; targetUserId: number; isVideo: boolean },
+  ) {
+    const userId = client.data.user?.id;
+    if (!userId) throw new WsException('Unauthorized');
+    await this.conversationsService.ensureConversationAccess(data.conversationId, userId);
+    this.server.to(`user_${data.targetUserId}`).emit('call:incoming', {
+      conversationId: data.conversationId,
+      callerId: userId,
+      isVideo: data.isVideo,
+    });
+  }
+
+  @SubscribeMessage('call:signal')
+  async handleCallSignal(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: number; targetUserId: number; signalData: any },
+  ) {
+    const userId = client.data.user?.id;
+    if (!userId) throw new WsException('Unauthorized');
+    this.server.to(`user_${data.targetUserId}`).emit('call:signal', {
+      senderId: userId,
+      signalData: data.signalData,
+    });
+  }
+
+  @SubscribeMessage('call:end')
+  async handleCallEnd(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { conversationId: number; targetUserId: number; duration?: number },
+  ) {
+    const userId = client.data.user?.id;
+    if (!userId) throw new WsException('Unauthorized');
+
+    this.server.to(`user_${data.targetUserId}`).emit('call:ended', { conversationId: data.conversationId });
+
+    if (data.duration && data.duration > 0) {
+      const logMessage = `Call ended. Duration: ${Math.floor(data.duration / 60)}m ${data.duration % 60}s`;
+      const saved = await this.messagesService.createMessage(
+        userId,
+        data.conversationId,
+        logMessage,
+        undefined,
+        MessageType.CALL_LOG,
+        data.duration,
+      );
+      const full = await this.messagesService.getMessageById(saved.id);
+      this.server.to(`conversation_${data.conversationId}`).emit('message:new', full);
     }
   }
 }

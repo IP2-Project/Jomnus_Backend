@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
-import { MessageEntity } from './entity/messages.entity';
+import { MessageEntity, MessageType } from './entity/messages.entity';
 import { ConversationsService } from '@/conversations/conversations.service';
 import {
   BadRequestException,
@@ -24,6 +24,8 @@ export class MessagesService {
     conversationId: number,
     message: string,
     imageUrl?: string,
+    type: MessageType = MessageType.TEXT,
+    callDuration?: number,
   ) {
     const conversation =
       await this.conversationsService.ensureConversationAccess(
@@ -33,7 +35,7 @@ export class MessagesService {
 
     const text = message?.trim();
 
-    if (!text && !imageUrl) {
+    if (!text && !imageUrl && type !== MessageType.CALL_LOG) {
       throw new BadRequestException('Message cannot be empty');
     }
 
@@ -41,7 +43,9 @@ export class MessagesService {
       conversation_id: Number(conversationId),
       sender_id: senderId,
       message: text || '',
+      type,
       image_url: imageUrl,
+      call_duration: callDuration,
     });
 
     return await this.messageRepository.save(newMessage);

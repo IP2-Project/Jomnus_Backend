@@ -15,6 +15,7 @@ import { extname } from 'path';
 import { MessagesService } from './messages.service';
 import { ChatGateway } from '@/chat/chat.getway';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
+import { MessageType } from './entity/messages.entity';
 
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
@@ -43,12 +44,13 @@ export class MessageController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     const imageUrl = file ? `/uploads/messages/${file.filename}` : undefined;
-
+    const messageType = imageUrl ? MessageType.IMAGE : MessageType.TEXT;
     const saved = await this.messagesService.createMessage(
       req.user.id,
       Number(dto.conversationId),
       dto.message,
       imageUrl,
+      messageType,
     );
 
     const full = await this.messagesService.getMessageById(saved.id);
