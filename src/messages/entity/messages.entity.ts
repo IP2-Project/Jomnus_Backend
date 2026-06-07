@@ -9,6 +9,12 @@ import {
 import { ConversationsEntity } from '@/conversations/entity/conversations.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 
+export enum MessageType {
+  TEXT = 'TEXT',
+  IMAGE = 'IMAGE',
+  CALL_LOG = 'CALL_LOG',
+}
+
 @Entity('messages')
 export class MessageEntity {
   @PrimaryGeneratedColumn()
@@ -17,18 +23,17 @@ export class MessageEntity {
   @Column()
   conversation_id!: number;
 
+  @Column({ type: 'enum', enum: MessageType, default: MessageType.TEXT })
+  type!: MessageType;
+
   @Column({ nullable: true })
   image_url?: string;
 
-  @ManyToOne(
-    () => ConversationsEntity,
-    (conversation) => conversation.messages,
-    {
-      onDelete: 'CASCADE',
-    },
-  )
-  @JoinColumn({ name: 'conversation_id' })
-  conversation!: ConversationsEntity;
+  @Column({ name: 'message', type: 'text', nullable: true })
+  message!: string;
+
+  @Column({ nullable: true })
+  call_duration?: number; // Duration in seconds if it's a CALL_LOG
 
   @Column()
   sender_id!: number;
@@ -37,8 +42,11 @@ export class MessageEntity {
   @JoinColumn({ name: 'sender_id' })
   sender!: UserEntity;
 
-  @Column({ name: 'message', type: 'text' })
-  message!: string;
+  @ManyToOne(() => ConversationsEntity, (conversation) => conversation.messages, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'conversation_id' })
+  conversation!: ConversationsEntity;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at!: Date;
