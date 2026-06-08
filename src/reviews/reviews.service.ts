@@ -68,11 +68,16 @@ export class ReviewsService {
     return this.reviewRepository.save(review);
   }
 
-  // 🔥 FIXED: Reviews ABOUT me (for your UI)
+
   async getReviewsAboutMe(userId: number): Promise<any[]> {
     const reviews = await this.reviewRepository.find({
       where: { reviewee_id: userId },
-      relations: ['reviewer'],
+      relations: {
+        reviewer: true,
+        assignment: {
+          task: true,
+        },
+      },
       order: { created_at: 'DESC' },
     });
 
@@ -82,14 +87,17 @@ export class ReviewsService {
       comment: review.comment,
       created_at: review.created_at,
       assignment_id: review.assignment_id,
-      reviewer_id: review.reviewer_id,        // ← add this
-      // ✅ FIX: flatten relation
+
+      reviewer_id: review.reviewer_id,
       reviewerName: review.reviewer?.fullName || 'Unknown',
       reviewerImage: review.reviewer?.profileImage || null,
+
+      // 🔥 ADD THIS
+      task_title: review.assignment?.task?.title || 'Unknown task',
     }));
   }
 
-  // 🔥 FIXED: Reviews I gave (optional page)
+
   async getReviewsIGave(userId: number): Promise<any[]> {
     const reviews = await this.reviewRepository.find({
       where: { reviewer_id: userId },
@@ -127,7 +135,7 @@ export class ReviewsService {
     }));
   }
 
-  // ✅ UPDATE (already correct)
+
   async updateReview(
     id: number,
     updateData: Partial<CreateReviewDto>,
