@@ -60,15 +60,19 @@ export class AssignmentsController {
     return this.assignService.findByUser(req.user.id);
   }  
 
-  // assignments.controller.ts
-@Get('work-history')
-async getWorkHistory(@Req() req: RequestWithUser) {
-  return this.assignService.getCompletedWorkHistory(req.user.id);
-}
+  @Get('work-history')
+  async getWorkHistory(@Req() req: RequestWithUser) {
+    return this.assignService.getCompletedWorkHistory(req.user.id);
+  }
 
-@Get('work-history/:userId')
-async getWorkHistoryByUser(@Param('userId') userId: string) {
-  return this.assignService.getCompletedWorkHistory(Number(userId));
-}
-  
+  @Get('work-history/:userId')
+  async getWorkHistoryByUser(@Param('userId') userId: string) {
+    return this.assignService.getCompletedWorkHistory(Number(userId));
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.assignService.findOne(Number(id));
+  }
+ 
 }

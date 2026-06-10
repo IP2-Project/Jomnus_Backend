@@ -97,17 +97,39 @@ export class ApplicationsService {
   }
 
   async findMine(userId: number) {
-    return this.appRepo.find({
+    const apps = await this.appRepo.find({
       where: {
         performer_id: userId,
       },
-
       relations: ['task', 'task.requester'],
-
       order: {
         applied_at: 'DESC',
       },
     });
+
+    return apps.map((a) => ({
+      applicationId: a.id,
+      status: a.status,
+      offeredPrice: a.offered_price,
+
+      task: {
+        id: a.task.id,
+        title: a.task.title,
+        description: a.task.description,
+        deadline: a.task.deadline,
+        locationText: a.task.location_text,
+        latitude: a.task.latitude,
+        longitude: a.task.longitude,
+      },
+
+      requester: {
+        id: a.task.requester.id,
+        fullName: a.task.requester.fullName,
+        profileImage: a.task.requester.profileImage,
+      },
+
+      appliedAt: a.applied_at,
+    }));
   }
 
   async findByTask(taskId: number, user: UserEntity) {
