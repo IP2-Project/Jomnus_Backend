@@ -57,10 +57,6 @@ export class AssignmentsService {
             status: AssignmentStatus.IN_PROGRESS,
         });
 
-        // ✅ REFRESH 1: Recalculates performer's success rate and status changes
-        // await this.performerStats.refresh(assignment.performer_id);
-
-
         return { message: 'Marked as in progress' };
     }
 
@@ -217,23 +213,40 @@ export class AssignmentsService {
         return { message: 'Cancelled' };
     }
 
-    // assignments.service.ts
+    async findOne(id: number) {
+    const assignment = await this.assignRepo.findOne({
+        where: { id },
+        relations: [
+        "task",
+        "task.requester",
+        "performer",
+        "application",
+        ],
+    });
+
+    if (!assignment) {
+        throw new NotFoundException("Assignment not found");
+    }
+
+    return assignment;
+    }
+
     async getCompletedWorkHistory(userId: number) {
-    const assignments = await this.assignRepo.find({ // ← assignRepo not assignmentRepository
+    const assignments = await this.assignRepo.find({
         where: {
         performer_id: userId,
-        status: In([AssignmentStatus.COMPLETED, AssignmentStatus.VERIFIED]), // ← use enum
+        status: In([AssignmentStatus.COMPLETED, AssignmentStatus.VERIFIED]),
         },
-        relations: ['task', 'task.requester'], // ← load task and requester for display
-        order: { created_at: 'DESC' }, // ← created_at, no updated_at in your entity
+        relations: ['task', 'task.requester'], 
+        order: { created_at: 'DESC' },
     });
 
     return assignments.map((a) => ({
         id: a.id,
         title: a.task?.title ?? 'Untitled Task',
         description: a.task?.description ?? '',
-        tag: 'Completed Task',             // ← no category field in your task entity
-        price: a.accepted_price,           // ← snake_case to match entity
+        tag: 'Completed Task',           
+        price: a.accepted_price,         
         completedAt: a.created_at,
         requesterName: a.task?.requester?.fullName ?? 'Unknown',
     }));
@@ -255,8 +268,7 @@ export class AssignmentsService {
         ).length;
 
         const acceptedCount = assignments.length;
-
-        // nobody accepted yet
+        
         if (acceptedCount === 0) {
             await this.taskRepo.update(taskId, {
                 status: TaskStatus.POSTED,
@@ -265,7 +277,6 @@ export class AssignmentsService {
             return;
         }
 
-        // some accepted
         if (verifiedCount === 0) {
             await this.taskRepo.update(taskId, {
                 status: TaskStatus.ACCEPTED,
@@ -274,7 +285,6 @@ export class AssignmentsService {
             return;
         }
 
-        // partially completed
         if (verifiedCount < task.required_workers) {
             await this.taskRepo.update(taskId, {
                 status: TaskStatus.PARTIAL_COMPLETED,
@@ -283,7 +293,6 @@ export class AssignmentsService {
             return;
         }
 
-        // fully completed
         await this.taskRepo.update(taskId, {
             status: TaskStatus.COMPLETED,
         });
