@@ -33,7 +33,7 @@ export class MessageEntity {
   message!: string;
 
   @Column({ nullable: true })
-  call_duration?: number; // Duration in seconds if it's a CALL_LOG
+  call_duration?: number;
 
   @Column()
   sender_id!: number;

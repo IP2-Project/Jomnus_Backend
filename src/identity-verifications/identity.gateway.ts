@@ -23,7 +23,6 @@ export class IdentityGateway
 
   private logger: Logger = new Logger('IdentityGateway');
 
-  // This method will be called by the Service to push data to admins
   emitStatsUpdate(stats: any) {
     this.server.emit('identityStatsUpdated', stats);
   }

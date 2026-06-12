@@ -27,9 +27,6 @@ export class StatsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  /**
-   * Create default stats for newly registered users
-   */
   async createInitialStats(user: UserEntity) {
     const userId = Number(user.id);
 
@@ -74,9 +71,6 @@ export class StatsService {
     });
   }
 
-  /**
-   * Get performer statistics
-   */
   async getPerformerStats(userId: string): Promise<PerformerStats> {
     const stats = await this.performerRepo.findOne({
       where: {
@@ -93,9 +87,6 @@ export class StatsService {
     return stats;
   }
 
-  /**
-   * Get requester statistics
-   */
   async getRequesterStats(userId: string): Promise<RequesterStats> {
     const stats = await this.requesterRepo.findOne({
       where: {
@@ -112,9 +103,6 @@ export class StatsService {
     return stats;
   }
 
- /**
- * Refresh requester statistics
- */
   async refreshRequesterStats(userId: number) {
     // Count tasks posted by this requester
     const posted = await this.dataSource
@@ -124,7 +112,6 @@ export class StatsService {
       .where('t.requester_id = :userId', { userId })
       .getRawOne();
 
-    // Sum of verified assignments (total spent + tasks verified)
     const verified = await this.dataSource
       .getRepository(TaskAssignmentEntity)
       .createQueryBuilder('ta')
@@ -154,9 +141,6 @@ export class StatsService {
   }
 
 
-  /**
-   * Refresh performer statistics
-   */
   async refreshPerformerStats(userId: number) {
     const stats = await this.dataSource
       .getRepository(TaskAssignmentEntity)
@@ -175,7 +159,6 @@ export class StatsService {
       .andWhere('ta.status != :status', { status: AssignmentStatus.ASSIGNED })
       .getRawOne();
 
-    // ✅ avg_rating from reviews where this user is the reviewee
     const ratingResult = await this.dataSource
       .getRepository(Review)
       .createQueryBuilder('r')
@@ -207,8 +190,8 @@ export class StatsService {
         completed_tasks: Number(stats.completed_tasks),
         total_earnings: Number(stats.total_earnings),
         success_rate: successRate,
-        avg_rating: Number(Number(ratingResult.avg_rating).toFixed(1)), // ✅ e.g. 4.5
-        response_time: Math.round(Number(responseTimeResult.response_time)), // ✅ add here
+        avg_rating: Number(Number(ratingResult.avg_rating).toFixed(1)),
+        response_time: Math.round(Number(responseTimeResult.response_time)),
 
       })
       .where('user_id = :userId', { userId })
@@ -217,7 +200,6 @@ export class StatsService {
 
 
   async refreshAllStats() {
-    // Refresh all performers
     const performers = await this.dataSource
       .getRepository(TaskAssignmentEntity)
       .createQueryBuilder('ta')
@@ -228,7 +210,6 @@ export class StatsService {
       await this.refreshPerformerStats(Number(performer_id));
     }
 
-    // Refresh all requesters
     const requesters = await this.dataSource
       .getRepository(TaskEntity)
       .createQueryBuilder('t')
@@ -240,9 +221,6 @@ export class StatsService {
     }
   }
 
-    /**
-     * Validate user existence
-     */
     private async validateUser(userId: string) {
       const user = await this.userRepo.findOneBy({
         id: Number(userId),

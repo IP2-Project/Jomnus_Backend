@@ -35,13 +35,8 @@ export class TaskEntity {
   @Column()
   requester_id!: number;
 
-  // @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  // @JoinColumn({ name: 'requester_id' })
-  // requester!: UserEntity;
-
-   // tasks/entities/task.entity.ts
   @ManyToOne(() => UserEntity, (user) => user.tasks, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'requester_id' }) // This must match your DB column name exactly
+  @JoinColumn({ name: 'requester_id' }) 
   requester!: UserEntity;
 
   @Column('float')
@@ -71,9 +66,6 @@ export class TaskEntity {
 
   @Column({ type: 'float', nullable: true })
   longitude!: number;
-  
-
-  // ================= RELATIONS =================
 
   @OneToMany(() => ConversationsEntity, (conversation) => conversation.task)
   conversations!: ConversationsEntity[];
@@ -82,9 +74,8 @@ export class TaskEntity {
   taskCategories!: TaskCategory[];
 
   @ManyToOne(() => UserEntity, user => user.tasks, { nullable: true })
-  user: UserEntity;
+  user!: UserEntity;
 
-  // ================= TIMESTAMP =================
 
   @CreateDateColumn({ name: 'created_at' })
   created_at!: Date;

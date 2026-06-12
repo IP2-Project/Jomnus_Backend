@@ -43,7 +43,7 @@ export class TasksService {
             fullName: task.requester.fullName,
             email: task.requester.email,
             profileImage: task.requester.profileImage,
-            // 💥 ADD THIS: Now it will show up in your API response!
+            isIdentityVerified: task.requester.isIdentityVerified,
             stats: task.requester.requesterStats || null,
           }
           : null,

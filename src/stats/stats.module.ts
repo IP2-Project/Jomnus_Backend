@@ -14,9 +14,9 @@ import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
       PerformerStats,
       RequesterStats,
       UserEntity, 
-      TaskAssignmentEntity, // ✅ add this so we can calculate response time
+      TaskAssignmentEntity,
     ]),
-    // Use forwardRef just in case UsersModule also imports StatsModule
+    
     forwardRef(() => UsersModule), 
   ],
   controllers: [StatsController],

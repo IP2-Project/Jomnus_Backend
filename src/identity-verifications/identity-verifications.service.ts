@@ -283,7 +283,6 @@ export class IdentityVerificationsService {
         user_id: verification.user.id,
         audience: 'user',
         title: 'Verification Reset',
-        // This will now consistently output: "Reason: No reason provided"
         message: `Your identity verification has been reset to pending. Reason: ${displayReason}`,
         type: 'INFO_UPDATE', 
       });
@@ -383,17 +382,13 @@ async exportToCsv() {
     order: { created_at: 'DESC' },
   });
 
-  // 1. Define your headers
   const headers = ['ID', 'Full Name', 'Email', 'Status', 'Rejection Reason', 'Reviewer', 'Created At', 'ID Card URL', 'Selfie URL'];
 
-  // 2. Helper function to format cell values for CSV
   const formatCell = (val: any) => {
     const stringVal = String(val ?? '');
-    // Escape double quotes by doubling them, then wrap the whole value in quotes
     return `"${stringVal.replace(/"/g, '""')}"`;
   };
 
-  // 3. Create the rows
   const rows = data.map(v => [
     formatCell(v.id),
     formatCell(v.user?.fullName || ''),
@@ -406,7 +401,6 @@ async exportToCsv() {
     formatCell(v.selfie_url || '')
   ].join(','));
 
-  // 4. Combine headers and rows
   return [headers.join(','), ...rows].join('\n');
 }
 

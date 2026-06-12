@@ -7,7 +7,7 @@ export class AuditLogEntity {
   id!: number;
 
   @Column()
-  action!: string; // 'REQUEST_SUBMITTED', 'APPROVED', 'REJECTED', 'RESET_TO_PENDING', 'IMAGES_CLEARED'
+  action!: string;
 
   @Column({ type: 'text', nullable: true })
   reason?: string;

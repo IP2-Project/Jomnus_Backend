@@ -32,11 +32,11 @@ export enum UserStatus {
 
 @Entity('users')
 export class UserEntity extends BaseEntity {
-  @Expose() // 👈 CRITICAL: Unlocks full name from interceptor stripping
+  @Expose() 
   @Column({ name: 'FullName' })
   fullName!: string;
 
-  @Expose() // 👈 CRITICAL: Unlocks email from interceptor stripping
+  @Expose()
   @Column({ unique: true })
   email!: string;
 
@@ -44,11 +44,11 @@ export class UserEntity extends BaseEntity {
   @Column()
   password!: string;
 
-  @Expose() // Allow phone to pass through if needed later
+  @Expose()
   @Column({ nullable: true })
   phone?: string;
 
-  @Expose() // 👈 CRITICAL: Unlocks the profile image paths
+  @Expose()
   @Column({ name: 'profile_image', nullable: true })
   profileImage?: string;
 
@@ -89,8 +89,6 @@ export class UserEntity extends BaseEntity {
   @OneToMany(() => Review, (review) => review.reviewee)
   reviewsReceived!: Review[];
 
-  // --- FIGMA VIRTUAL FIELDS ---
-  // Added @Expose so these stay visible during serialization
   @Expose()
   verificationStatus?: string;
 

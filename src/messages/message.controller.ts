@@ -22,7 +22,7 @@ import { MessageType } from './entity/messages.entity';
 export class MessageController {
   constructor(
     private readonly messagesService: MessagesService,
-    private readonly chatGateway: ChatGateway, // ← inject gateway
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   @Post()
