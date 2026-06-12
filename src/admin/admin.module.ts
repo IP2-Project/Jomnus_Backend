@@ -21,9 +21,8 @@ import { UsersModule } from '@/users/users.module'; // 👈 Added UsersModule im
       AuditLogEntity,
       TaskEntity,
     ]),
-    // Guarantees NestJS doesn't encounter circular dependency freezes
     forwardRef(() => IdentityVerificationsModule), 
-    forwardRef(() => UsersModule), // 👈 Added: Exports UsersService out to the Admin Controller
+    forwardRef(() => UsersModule),
   ],
   controllers: [adminController],
   providers: [adminServices],

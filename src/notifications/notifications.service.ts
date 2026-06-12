@@ -11,8 +11,7 @@ export class NotificationsService {
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
   ) {}
-
-  // --- GENERIC METHOD (Prevents Merge Conflicts) ---
+  
   async createNotification(data: Partial<Notification>) {
     const notification = this.notificationRepo.create(data);
     return await this.notificationRepo.save(notification);

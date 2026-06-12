@@ -22,7 +22,7 @@ export class ApplicationsService {
     private assignmentsService: AssignmentsService,
     private userService: UsersService,
     private notificationsService: NotificationsService,
-    private conversationsService: ConversationsService, // ← must be here
+    private conversationsService: ConversationsService,
     private applicationsGateway: ApplicationsGateway,
   ) {}
 
@@ -270,8 +270,6 @@ export class ApplicationsService {
       application.id,
       application.offered_price,
     );
-
-    // await this.conversationsService.createConversation(task.id, user.id);
 
     await this.notificationsService.notifyApplicationAccepted(
       application.performer_id,

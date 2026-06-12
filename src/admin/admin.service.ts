@@ -33,7 +33,6 @@ export class adminServices {
     private readonly identityVerificationsService: IdentityVerificationsService,
   ) {}
 
-  // ============ USER MANAGEMENT ============
   async deleteUser(id: number) {
     return await this.UserRepository.delete(id);
   }
@@ -86,7 +85,6 @@ export class adminServices {
     };
   }
 
-  // ============ TASK MANAGEMENT ============
   async getAllTasks() {
     const tasks = await this.taskRepository.find({
       relations: ['requester'],
@@ -118,7 +116,6 @@ export class adminServices {
     return await this.taskRepository.findOne({ where: whereCondition });
   }
 
-  // ============ APPLICATIONS MANAGEMENT ============
   async getAllTaskApplications(id: number) {
     return await this.applicationRepository.find({
       where: { task_id: id },
@@ -131,7 +128,6 @@ export class adminServices {
     });
   }
 
-  // ============ ASSIGNMENTS MANAGEMENT ============
   async getAllTaskCompletions(id: number) {
     return await this.assignmentRepository.find({
       where: { status: AssignmentStatus.COMPLETED, task_id: id },
@@ -148,7 +144,6 @@ export class adminServices {
     });
   }
 
-  // ============ IDENTITY VERIFICATION METHODS ============
   async verifyIdentity(id: number, adminId: number) {
     return await this.identityVerificationsService.review(id, adminId, {
       status: 'APPROVED' as any,
@@ -166,12 +161,10 @@ export class adminServices {
     return await this.identityVerificationsService.resetToPending(id, adminId, reason);
   }
 
-  // ============ CSV EXPORT METHOD ============
   async exportVerificationsToCsv(): Promise<string> {
     return await this.identityVerificationsService.exportToCsv();
   }
 
-// ============ PAGINATION METHODS ============
 async paginateUsers(page: number, limit: number, search?: string, role?: string, status?: string) {
   const baseCondition: any = {};
 
@@ -213,7 +206,6 @@ async paginateUsers(page: number, limit: number, search?: string, role?: string,
       return {
         ...user,
         status: isBanned ? 'BANNED' : 'ACTIVE',
-        // Now safely populates APPROVED instead of defaulting to NONE
         verificationStatus: user['verificationStatus'] || (hasVerifiedFlag ? 'APPROVED' : 'NONE')
       };
     });

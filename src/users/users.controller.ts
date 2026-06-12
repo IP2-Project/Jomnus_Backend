@@ -30,31 +30,26 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-
-  // --- USER PROFILE UPDATES ---
-
   @UseGuards(JwtAuthGuard)
-    @Patch('me') // Matches axios.patch(".../users/me")
+    @Patch('me')
     async updateMe(
       @Request() req, 
-      @Body() updateUserDto: any // Use your UpdateUserDto here
+      @Body() updateUserDto: any
     ) {
-      const userId = this.getAdminId(req); // Gets ID from JWT token
+      const userId = this.getAdminId(req);
       return this.usersService.updateMe(userId, updateUserDto);
     }
 
   
   @UseGuards(JwtAuthGuard)
     @Post('upload-avatar')
-    @UseInterceptors(FileInterceptor('file')) // You'll need to install @nestjs/platform-express
+    @UseInterceptors(FileInterceptor('file'))
     async uploadAvatar(@UploadedFile() file: Express.Multer.File) {
-      // Logic to upload to S3/Cloudinary and return the URL
-      // return { url: 'https://stored-image-url.com/image.jpg' };
     }
 
 
   @UseGuards(JwtAuthGuard)
-    @Get('me') // Matches axios.get(".../users/me")
+    @Get('me')
     async getMe(@Request() req) {
       const userId = this.getAdminId(req);
       return this.usersService.findById(userId);
@@ -80,9 +75,6 @@ export class UsersController {
     }
 
 
-
-  // --- DASHBOARD & STATS ---
-
   @UseGuards(JwtAuthGuard)
   @Get('admin/dashboard')
   async getDashboard(@Query() query: any, @Request() req) {
@@ -97,11 +89,6 @@ export class UsersController {
     return this.usersService.getAdminSummaryStats();
   }
 
-  // --- VERIFICATION WORKFLOW (New Figma Support) ---
-
-  /**
-   * Figma Match: Powers the "Pending Requests" tab
-   */
   @UseGuards(JwtAuthGuard)
   @Get('admin/pending-verifications')
   async getPending(@Query('page') page: number, @Request() req) {
@@ -109,9 +96,6 @@ export class UsersController {
     return this.usersService.getPendingVerifications(page || 1);
   }
 
-  /**
-   * Figma Match: Review action (Approve/Reject) from the Identity service
-   */
   @UseGuards(JwtAuthGuard)
   @Patch('admin/review-verification/:id')
   async reviewVerification(
@@ -125,17 +109,12 @@ export class UsersController {
     return this.usersService.reviewVerification(id, status, adminId, reason);
   }
 
-  /**
-   * Figma Match: Activity Log/History for a specific user
-   */
   @UseGuards(JwtAuthGuard)
   @Get(':id/audit-logs')
   async getLogs(@Param('id', ParseIntPipe) id: number, @Request() req) {
     this.checkAdmin(req);
     return this.usersService.getUserAuditLogs(id);
   }
-
-  // --- ADMIN ACTIONS ---
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/manual-verify')
@@ -189,7 +168,6 @@ export class UsersController {
     return this.usersService.restoreUser(id, adminId);
   }
 
-  // Banned user
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async BanUser(@Param('id', ParseIntPipe) id: number, @Request() req) {
@@ -197,15 +175,6 @@ export class UsersController {
     const adminId = this.getAdminId(req);
     return this.usersService.BanUser(id, adminId);
   }
-
-  // --- GENERAL SEARCH ---
-
-  // @UseGuards(JwtAuthGuard)
-  // @Get(':id')
-  // async findById(@Param('id', ParseIntPipe) id: number, @Request() req) {
-  //   this.checkAdmin(req);
-  //   return this.usersService.findById(id);
-  // }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile/:id')
@@ -220,20 +189,17 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
-// Replace your old findAll with this:
-@UseGuards(JwtAuthGuard)
-@Get()
-async findAll(@Query() query: any, @Request() req) {
-  this.checkAdmin(req); // Keep it secure
-  return this.usersService.getPaginatedUsers(query);
-}
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  async findAll(@Query() query: any, @Request() req) {
+    this.checkAdmin(req); // Keep it secure
+    return this.usersService.getPaginatedUsers(query);
+  }
 
   @Post()
   create(@Body() registerDto: RegisterAuthDto) {
     return this.usersService.create(registerDto);
   }
-
-  // --- HELPERS ---
 
   private checkAdmin(req: any) {
     if (!req.user) throw new ForbiddenException('User session not found.');

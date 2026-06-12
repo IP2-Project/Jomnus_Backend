@@ -28,7 +28,6 @@ export class adminController {
     private readonly usersService: UsersService,
   ) {}
 
-  // ============ USER MANAGEMENT ============
   @Get('users')
   async getAllUsers(
     @Query('page') page: string = '1',
@@ -44,7 +43,6 @@ export class adminController {
       throw new BadRequestException('Invalid page or limit parameters');
     }
     
-    // FIXED: Changed from usersService to adminServices to leverage our updated filtering system
     return await this.adminServices.paginateUsers(pageNum, limitNum, search, role, status);
   }
 
@@ -60,7 +58,6 @@ export class adminController {
     return await this.usersService.restoreUser(id, adminId);
   }
 
-  // ============ TASK MANAGEMENT ============
   @Get('tasks')
   async getAllTasks() {
     return await this.adminServices.getAllTasks();
@@ -76,7 +73,6 @@ export class adminController {
     return await this.adminServices.findTaskById(id, '');
   }
 
-  // ============ APPLICATIONS MANAGEMENT ============
   @Get('applications')
   async getAllApplications(
     @Query('page') page: string = '1',
@@ -97,7 +93,6 @@ export class adminController {
     return await this.adminServices.getAllTaskApplications(taskId);
   }
 
-  // ============ ASSIGNMENTS MANAGEMENT ============
   @Get('assignments')
   async getAllAssignments(
     @Query('page') page: string = '1',
@@ -118,7 +113,6 @@ export class adminController {
     return await this.adminServices.getAllTaskCompletions(taskId);
   }
 
-  // ============ VERIFICATIONS MANAGEMENT ============
   @Get('verifications/export')
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename="verifications-export.csv"')
@@ -160,14 +154,13 @@ export class adminController {
 @Patch('verifications/:id/reset')
   async resetVerificationToPending(
     @Param('id', ParseIntPipe) id: number, 
-    @Body('reason') reason: string, // ✅ Added body parameter to capture prompt message
+    @Body('reason') reason: string, 
     @Req() req: any
   ) {
     const adminId = req.user?.id || 1; 
-    return await this.adminServices.resetToPending(id, reason, adminId); // ✅ Forwarded reason parameter
+    return await this.adminServices.resetToPending(id, reason, adminId);
   }
 
-  // ============ DASHBOARD STATS ============
   @Get('dashboard/stats')
   async getDashboardStats() {
     const users = await this.adminServices.getAllUser();

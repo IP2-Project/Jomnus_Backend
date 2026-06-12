@@ -17,10 +17,9 @@ import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 export class StatsController {
   constructor(
     private readonly statsService: StatsService,
-    private readonly usersService: UsersService, // Inject UsersService
+    private readonly usersService: UsersService, 
   ) {}
 
-   // ✅ Add this endpoint
   @Post('refresh')
   async refreshAll() {
     await this.statsService.refreshAllStats();

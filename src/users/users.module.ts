@@ -13,8 +13,8 @@ import { UsersCleanupService } from './users-cleanup.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserEntity]),
-    forwardRef(() => StatsModule), // 👈 Use forwardRef here
-    forwardRef(() => IdentityVerificationsModule), // 👈 Use forwardRef here
+    forwardRef(() => StatsModule),
+    forwardRef(() => IdentityVerificationsModule),
   ],
   controllers: [UsersController],
   providers: [UsersService, UsersCleanupService],

@@ -19,7 +19,6 @@ export class ReviewsService {
     private readonly taskRepository: Repository<TaskEntity>,
   ) {}
 
-  // ✅ CREATE REVIEW (no change needed)
   async createReview(dto: CreateReviewDto, userId: number): Promise<Review> {
     const assignment = await this.assignmentRepository.findOne({
       where: { id: dto.assignment_id },
@@ -92,7 +91,6 @@ export class ReviewsService {
       reviewerName: review.reviewer?.fullName || 'Unknown',
       reviewerImage: review.reviewer?.profileImage || null,
 
-      // 🔥 ADD THIS
       task_title: review.assignment?.task?.title || 'Unknown task',
     }));
   }
@@ -116,7 +114,6 @@ export class ReviewsService {
     }));
   }
 
-  // ⚠️ keep only if needed (admin/debug)
   async getAllReviews(): Promise<any[]> {
     const reviews = await this.reviewRepository.find({
       relations: ['reviewer', 'reviewee'],
