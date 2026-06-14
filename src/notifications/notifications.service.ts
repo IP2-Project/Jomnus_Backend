@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { UserEntity } from '../users/entity/user.entity';
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -11,7 +12,7 @@ export class NotificationsService {
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
   ) {}
-  
+
   async createNotification(data: Partial<Notification>) {
     const notification = this.notificationRepo.create(data);
     return await this.notificationRepo.save(notification);
@@ -28,8 +29,20 @@ export class NotificationsService {
     return this.notificationRepo.save(notification);
   }
 
-  async broadcastToAll(title: string, message: string) {
-    const users = await this.userRepo.find({ select: ['id'] });
+  async sendBroadcast(data: { title: string; message: string; type: string; audience: string }) {
+    const { title, message, type, audience } = data;
+
+    let whereCondition = {};
+    if (audience === 'REQUESTER') {
+      whereCondition = { role: 'REQUESTER' };
+    } else if (audience === 'PERFORMER') {
+      whereCondition = { role: 'PERFORMER' };
+    }
+
+    const users = await this.userRepo.find({ 
+      where: whereCondition,
+      select: ['id'] 
+    });
 
     const notifications = users.map((u) => {
       return this.notificationRepo.create({
@@ -37,11 +50,17 @@ export class NotificationsService {
         audience: 'user',
         title: title,
         message: message,
+        type: type || 'INFO',
       });
     });
 
     await this.notificationRepo.save(notifications);
-    return { success: true, count: notifications.length };
+    
+    return { 
+      success: true, 
+      sent_count: notifications.length,
+      audience_targeted: audience
+    };
   }
 
   async notifyApplicationAccepted(performerId: number, taskTitle: string, taskId: number) {
