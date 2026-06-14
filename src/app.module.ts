@@ -17,7 +17,6 @@ import { CategoriesModule } from './categories/categories.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
-import { TelegramModule } from './telegram/telegram.module';
 import { HealthModule } from './health/health.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { IdentityVerificationsModule } from './identity-verifications/identity-verifications.module';
@@ -55,7 +54,6 @@ import { ChatModule } from './chat/chat.module';
     AssignmentsModule,
     ProofsModule,
     ReviewsModule,
-    TelegramModule,
     HealthModule,
     ApplicationsModule,
     IdentityVerificationsModule,

@@ -116,7 +116,6 @@ export class IdentityVerificationsService {
     let selfieUpload: UploadApiResponse;
 
     try {
-      // Execute uploads in parallel to reduce processing wait times
       const [idUploadRes, selfieUploadRes] = await Promise.all([
         this.uploadToCloudinary(dto.id_card_file, 'identity-verifications/id_cards'),
         this.uploadToCloudinary(dto.selfie_file, 'identity-verifications/selfies'),
@@ -191,7 +190,6 @@ export class IdentityVerificationsService {
       if (!verification) throw new NotFoundException('Request not found');
       if (!verification.user) throw new BadRequestException('No user linked.');
 
-      // --- UPDATED STRICT VALIDATION CHECK ---
       if (dto.status === VerificationStatus.APPROVED) {
         const isCardMissing = !verification.id_card_url || verification.id_card_url.trim() === '';
         const isSelfieMissing = !verification.selfie_url || verification.selfie_url.trim() === '';
@@ -235,11 +233,19 @@ export class IdentityVerificationsService {
     });
 
     const isApproved = dto.status === VerificationStatus.APPROVED;
+    
+    const rejectionReason = dto.rejection_reason?.trim();
+    const formattedReason = rejectionReason && rejectionReason.length > 0 
+      ? rejectionReason 
+      : "No reason provided";
+    
     await this.notificationsService.createNotification({
       user_id: result.user.id,
       audience: 'user',
-      title: 'Status Updated',
-      message: isApproved ? 'Your identity is verified!' : `Rejected: ${dto.rejection_reason}`,
+      title: isApproved ? 'Identity Verified' : 'Verification Rejected',
+      message: isApproved 
+        ? 'Your identity is verified!' 
+        : `Your identity verification has been rejected. Reason: ${formattedReason}`,
       type: isApproved ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
     });
 
@@ -256,7 +262,6 @@ export class IdentityVerificationsService {
     if (!verification) throw new NotFoundException('Request not found');
     if (!verification.user) throw new BadRequestException('No associated user.');
 
-    // Standardize the reason display
     const displayReason = reason && reason.trim().length > 0 
       ? reason.trim() 
       : "No reason provided";
@@ -376,33 +381,33 @@ export class IdentityVerificationsService {
     };
   }
 
-async exportToCsv() {
-  const data = await this.verificationRepo.find({
-    relations: ['user', 'reviewer'],
-    order: { created_at: 'DESC' },
-  });
+  async exportToCsv() {
+    const data = await this.verificationRepo.find({
+      relations: ['user', 'reviewer'],
+      order: { created_at: 'DESC' },
+    });
 
-  const headers = ['ID', 'Full Name', 'Email', 'Status', 'Rejection Reason', 'Reviewer', 'Created At', 'ID Card URL', 'Selfie URL'];
+    const headers = ['ID', 'Full Name', 'Email', 'Status', 'Rejection Reason', 'Reviewer', 'Created At', 'ID Card URL', 'Selfie URL'];
 
-  const formatCell = (val: any) => {
-    const stringVal = String(val ?? '');
-    return `"${stringVal.replace(/"/g, '""')}"`;
-  };
+    const formatCell = (val: any) => {
+      const stringVal = String(val ?? '');
+      return `"${stringVal.replace(/"/g, '""')}"`;
+    };
 
-  const rows = data.map(v => [
-    formatCell(v.id),
-    formatCell(v.user?.fullName || ''),
-    formatCell(v.user?.email || ''),
-    formatCell(v.status),
-    formatCell(v.rejection_reason || 'N/A'),
-    formatCell(v.reviewer?.fullName || 'Unassigned'),
-    formatCell(v.created_at),
-    formatCell(v.id_card_url || ''),
-    formatCell(v.selfie_url || '')
-  ].join(','));
+    const rows = data.map(v => [
+      formatCell(v.id),
+      formatCell(v.user?.fullName || ''),
+      formatCell(v.user?.email || ''),
+      formatCell(v.status),
+      formatCell(v.rejection_reason || 'N/A'),
+      formatCell(v.reviewer?.fullName || 'Unassigned'),
+      formatCell(v.created_at),
+      formatCell(v.id_card_url || ''),
+      formatCell(v.selfie_url || '')
+    ].join(','));
 
-  return [headers.join(','), ...rows].join('\n');
-}
+    return [headers.join(','), ...rows].join('\n');
+  }
 
   private async uploadToCloudinary(file: Express.Multer.File, folder: string): Promise<UploadApiResponse> {
     return new Promise((resolve, reject) => {
