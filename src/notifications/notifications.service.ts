@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { UserEntity } from '../users/entity/user.entity';
+import { NotificationsGateway } from './notifications.gateway';
 
 @Injectable()
 export class NotificationsService {
@@ -11,6 +12,7 @@ export class NotificationsService {
     private readonly notificationRepo: Repository<Notification>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async createNotification(data: Partial<Notification>) {
@@ -25,44 +27,45 @@ export class NotificationsService {
       title,
       message,
       task_id: taskId ?? null,
+      type: 'INFO',
     });
-    return this.notificationRepo.save(notification);
+    const saved = await this.notificationRepo.save(notification);
+    this.notificationsGateway.sendToUser(userId, 'personal_notification', {
+      message: message,
+      title: title
+    });
+    return saved;
   }
 
-  async sendBroadcast(data: { title: string; message: string; type: string; audience: string }) {
-    const { title, message, type, audience } = data;
-
-    let whereCondition = {};
-    if (audience === 'REQUESTER') {
-      whereCondition = { role: 'REQUESTER' };
-    } else if (audience === 'PERFORMER') {
-      whereCondition = { role: 'PERFORMER' };
-    }
+  async sendBroadcast(data: { title: string; message: string }) {
+    const { title, message } = data;
 
     const users = await this.userRepo.find({ 
-      where: whereCondition,
       select: ['id'] 
     });
 
     const notifications = users.map((u) => {
       return this.notificationRepo.create({
         user_id: u.id,
-        audience: 'user',
+        audience: 'user', 
         title: title,
         message: message,
-        type: type || 'INFO',
+        type: 'INFO',     
       });
     });
 
     await this.notificationRepo.save(notifications);
+
+    this.notificationsGateway.sendToAll('new_broadcast', {
+      title: title,
+      message: message,
+    });
     
     return { 
       success: true, 
-      sent_count: notifications.length,
-      audience_targeted: audience
+      sent_count: notifications.length 
     };
   }
-
   async notifyApplicationAccepted(performerId: number, taskTitle: string, taskId: number) {
     return this.sendToUser(performerId, 'Application Accepted ', `Congratulations! You have been chosen to complete: ${taskTitle}.`, taskId);
   }
@@ -103,7 +106,16 @@ export class NotificationsService {
       message,
       task_id: taskId ?? null,
     });
-    return this.notificationRepo.save(notification);
+    
+    const saved = await this.notificationRepo.save(notification);
+
+    // ✨ Trigger the Admin Alert
+    this.notificationsGateway.sendToAdmins('alert', {
+      message: message,
+      title: title
+    });
+
+    return saved;
   }
 
   async notifyAdminNewIdVerification(userId: number) {

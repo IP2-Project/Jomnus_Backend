@@ -37,7 +37,7 @@ export class NotificationsController {
   @Post('broadcast')
   async createBroadcast(
     @Request() req,
-    @Body() body: { title: string; message: string; type: string; audience: string }
+    @Body() body: { title: string; message: string }
   ) {
     const userRole = req.user?.currentRole || req.user?.role;
     if (userRole !== 'ADMIN') {
