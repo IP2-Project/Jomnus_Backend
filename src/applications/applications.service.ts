@@ -12,6 +12,7 @@ import { UserEntity } from '@/users/entity/user.entity';
 import { NotificationsService } from '@/notifications/notifications.service';
 import { ConversationsService } from '@/conversations/conversations.service';
 import { ApplicationsGateway } from './applications.gateway';
+import { NotificationsGateway } from '@/notifications/notifications.gateway';
 
 @Injectable()
 export class ApplicationsService {
@@ -24,6 +25,7 @@ export class ApplicationsService {
     private notificationsService: NotificationsService,
     private conversationsService: ConversationsService,
     private applicationsGateway: ApplicationsGateway,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(dto: CreateApplicationDto, userId: number) {
@@ -82,6 +84,11 @@ export class ApplicationsService {
         applicationWithPerformer.performer.fullName,
         task.title,
         task.id,
+      );
+      this.notificationsGateway.sendToUser(
+        task.requester_id,
+        'personal_notification',
+        { message: `${applicationWithPerformer.performer.fullName} applied to your task!` }
       );
     }
 
@@ -275,6 +282,12 @@ export class ApplicationsService {
       application.performer_id,
       task.title,
       task.id,
+    );
+
+    this.notificationsGateway.sendToUser(
+      application.performer_id,
+      'personal_notification',
+      { message: `Congratulations! Your application for "${task.title}" was accepted.` }
     );
 
     this.applicationsGateway.emitApplicationsUpdate({
