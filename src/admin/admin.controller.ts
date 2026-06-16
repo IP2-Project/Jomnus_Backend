@@ -1,17 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  UseGuards,
-  Patch,
-  Delete,
-  ParseIntPipe,
-  BadRequestException,
-  Body,
-  Header,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, Patch, Delete, ParseIntPipe, BadRequestException, Body, Header, Req } from '@nestjs/common';
 import { adminServices } from './admin.service';
 import { UsersService } from '@/users/users.service';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';

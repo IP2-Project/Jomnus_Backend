@@ -198,141 +198,141 @@ const seedDatabase = async () => {
       }
     }
     // =====================================================
-// TASKS
-// =====================================================
+    // TASKS
+    // =====================================================
 
-const requester =
-  await userRepository.findOne({
-    where: {
-      email: 'jane.smith@jomnus.com',
-    },
-  });
-
-if (requester) {
-  const tasks = [
-    {
-      title:
-        'Luxury Penthouse UI Redesign',
-      description:
-        'Need modern UI redesign',
-      requester_id: requester.id,
-      price: 4200,
-      deadline: new Date(
-        '2026-12-31',
-      ),
-      required_workers: 1,
-      status: TaskStatus.POSTED,
-      location_text:
-        'Phnom Penh',
-    },
-
-    {
-      title:
-        'E-commerce API Integration',
-      description:
-        'Backend API work',
-      requester_id: requester.id,
-      price: 1850,
-      deadline: new Date(
-        '2026-12-31',
-      ),
-      required_workers: 1,
-      status: TaskStatus.POSTED,
-      location_text:
-        'Siem Reap',
-    },
-  ];
-
-  for (const taskData of tasks) {
-    const exists =
-      await taskRepository.findOne({
+    const requester =
+      await userRepository.findOne({
         where: {
-          title:
-            taskData.title,
+          email: 'jane.smith@jomnus.com',
         },
       });
 
-    if (!exists) {
-      const task =
-        taskRepository.create(
-          taskData,
+    if (requester) {
+      const tasks = [
+        {
+          title:
+            'Luxury Penthouse UI Redesign',
+          description:
+            'Need modern UI redesign',
+          requester_id: requester.id,
+          price: 4200,
+          deadline: new Date(
+            '2026-12-31',
+          ),
+          required_workers: 1,
+          status: TaskStatus.POSTED,
+          location_text:
+            'Phnom Penh',
+        },
+
+        {
+          title:
+            'E-commerce API Integration',
+          description:
+            'Backend API work',
+          requester_id: requester.id,
+          price: 1850,
+          deadline: new Date(
+            '2026-12-31',
+          ),
+          required_workers: 1,
+          status: TaskStatus.POSTED,
+          location_text:
+            'Siem Reap',
+        },
+      ];
+
+      for (const taskData of tasks) {
+        const exists =
+          await taskRepository.findOne({
+            where: {
+              title:
+                taskData.title,
+            },
+          });
+
+        if (!exists) {
+          const task =
+            taskRepository.create(
+              taskData,
+            );
+
+          await taskRepository.save(
+            task,
+          );
+          tasksByTitle.set(task.title, task);
+
+          console.log(
+            `Task created: ${task.title}`,
+          );
+        } else {
+          tasksByTitle.set(exists.title, exists);
+        }
+      }
+    }
+    // ================= APPLICATIONS =================
+
+    const performer = usersByEmail.get(
+      'john.doe@jomnus.com',
+    );
+    const taskOne = tasksByTitle.get(
+      'Luxury Penthouse UI Redesign',
+    );
+    const taskTwo = tasksByTitle.get(
+      'E-commerce API Integration',
+    );
+
+    const applications = [
+      performer && taskOne
+        ? {
+            task_id: taskOne.id,
+            performer_id: performer.id,
+            offered_price: 4200,
+            status: ApplicationStatus.PENDING,
+          }
+        : null,
+      performer && taskTwo
+        ? {
+            task_id: taskTwo.id,
+            performer_id: performer.id,
+            offered_price: 1850,
+            status: ApplicationStatus.ACCEPTED,
+          }
+        : null,
+    ].filter(
+      (
+        appData,
+      ): appData is {
+        task_id: number;
+        performer_id: number;
+        offered_price: number;
+        status: ApplicationStatus;
+      } => appData !== null,
+    );
+
+    for (const appData of applications) {
+      const exists =
+        await applicationRepository.findOne({
+          where: {
+            task_id: appData.task_id,
+            performer_id: appData.performer_id,
+          },
+        });
+
+      if (!exists) {
+        const application =
+          applicationRepository.create(appData);
+
+        await applicationRepository.save(
+          application,
         );
 
-      await taskRepository.save(
-        task,
-      );
-      tasksByTitle.set(task.title, task);
-
-      console.log(
-        `Task created: ${task.title}`,
-      );
-    } else {
-      tasksByTitle.set(exists.title, exists);
+        console.log(
+          `Application created for task ${appData.task_id}`,
+        );
+      }
     }
-  }
-}
-// ================= APPLICATIONS =================
-
-const performer = usersByEmail.get(
-  'john.doe@jomnus.com',
-);
-const taskOne = tasksByTitle.get(
-  'Luxury Penthouse UI Redesign',
-);
-const taskTwo = tasksByTitle.get(
-  'E-commerce API Integration',
-);
-
-const applications = [
-  performer && taskOne
-    ? {
-        task_id: taskOne.id,
-        performer_id: performer.id,
-        offered_price: 4200,
-        status: ApplicationStatus.PENDING,
-      }
-    : null,
-  performer && taskTwo
-    ? {
-        task_id: taskTwo.id,
-        performer_id: performer.id,
-        offered_price: 1850,
-        status: ApplicationStatus.ACCEPTED,
-      }
-    : null,
-].filter(
-  (
-    appData,
-  ): appData is {
-    task_id: number;
-    performer_id: number;
-    offered_price: number;
-    status: ApplicationStatus;
-  } => appData !== null,
-);
-
-for (const appData of applications) {
-  const exists =
-    await applicationRepository.findOne({
-      where: {
-        task_id: appData.task_id,
-        performer_id: appData.performer_id,
-      },
-    });
-
-  if (!exists) {
-    const application =
-      applicationRepository.create(appData);
-
-    await applicationRepository.save(
-      application,
-    );
-
-    console.log(
-      `Application created for task ${appData.task_id}`,
-    );
-  }
-}
 
     console.log('Database seeding completed successfully!');
   } catch (error) {

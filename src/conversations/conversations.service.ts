@@ -139,7 +139,7 @@ export class ConversationsService {
       const key = conv.participantId ? String(conv.participantId) : null;
       if (!key) continue;
       if (!seen.has(key)) {
-        seen.set(key, conv); // first = most recent because order: DESC
+        seen.set(key, conv);
       }
     }
 
