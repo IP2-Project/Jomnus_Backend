@@ -4,7 +4,6 @@ import { TaskEntity } from '@/tasks/entities/task.entity';
 
 @Entity('conversations')
 export class ConversationsEntity {
-  // @PrimaryColumn()
   @PrimaryGeneratedColumn()
   id!: number;
 

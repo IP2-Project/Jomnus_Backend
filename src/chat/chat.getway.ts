@@ -95,7 +95,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: number; message: string },
   ) {
-    const userId = client.data.user?.id; // ← fix: was client.data.userId, should be client.data.user.id
+    const userId = client.data.user?.id;
     if (!userId) throw new WsException('Unauthorized');
 
     try {

@@ -102,7 +102,6 @@ export class TasksService {
       },
     });
 
-    // GROUP CATEGORIES BY TASK ID
     const categoriesByTaskId: Record<number, number[]> = {};
 
     taskCategories.forEach((tc) => {
@@ -113,7 +112,6 @@ export class TasksService {
       categoriesByTaskId[tc.task_id].push(tc.category_id);
     });
 
-    // LOAD FULL CATEGORY OBJECTS
     const uniqueCategoryIds = [
       ...new Set(taskCategories.map((tc) => tc.category_id)),
     ];
@@ -122,7 +120,6 @@ export class TasksService {
       ? await this.categoriesService.findByIds(uniqueCategoryIds)
       : [];
 
-    // GROUP FULL CATEGORY OBJECTS
     const fullCategoriesByTaskId: Record<number, unknown[]> = {};
 
     Object.entries(categoriesByTaskId).forEach(
