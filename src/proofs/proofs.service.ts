@@ -8,7 +8,6 @@ import { AssignmentStatus, TaskAssignmentEntity } from '@/assignments/entities/a
 import { TaskEntity, TaskStatus } from '@/tasks/entities/task.entity';
 import { UserEntity } from '@/users/entity/user.entity';
 import { NotificationsService } from '@/notifications/notifications.service';
-// import { Review } from '@/reviews/entities/review.entity';
 
 @Injectable()
 export class ProofsService {

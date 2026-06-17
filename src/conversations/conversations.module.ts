@@ -7,7 +7,7 @@ import { MessageEntity } from '@/messages/entity/messages.entity';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
 import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
-import { MessagesModule } from '@/messages/messages.module';
+import { UserEntity } from '@/users/entity/user.entity';
 
 @Module({
   imports: [
@@ -16,9 +16,9 @@ import { MessagesModule } from '@/messages/messages.module';
       MessageEntity,
       TaskEntity,
       TaskApplicationEntity,
-      TaskAssignmentEntity
+      TaskAssignmentEntity,
+      UserEntity,
     ]),
-    forwardRef(() => MessagesModule)
   ],
   providers: [ConversationsService],
   controllers: [ConversationsController],

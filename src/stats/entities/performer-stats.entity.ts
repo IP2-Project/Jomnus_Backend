@@ -9,7 +9,7 @@ export class PerformerStats {
   @Column({ unique: true })
   user_id!: number;
 
-  @OneToOne(() => UserEntity)
+  @OneToOne(() => UserEntity, (user) => user.performerStats, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 
@@ -25,6 +25,6 @@ export class PerformerStats {
   @Column('float', { default: 0 })
   total_earnings!: number;
 
-  @Column({ nullable: true })
-  response_time!: number;
+  @Column({ type: 'int', nullable: true })
+  response_time!: number | null;
 }

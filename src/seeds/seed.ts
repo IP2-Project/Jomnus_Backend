@@ -1,6 +1,15 @@
 import { AppDataSource } from '../../ormconfig';
 import { UserEntity, UserRole } from '../users/entity/user.entity';
-import { CategoryEntity } from '../categories/entities/category.entity';
+import { CategoryEntity } from '@/categories/entities/category.entity';
+import {
+  TaskEntity,
+  TaskStatus,
+} from '@/tasks/entities/task.entity';
+
+import {
+  TaskApplicationEntity,
+  ApplicationStatus,
+} from '@/applications/entities/task-application.entity';
 import * as bcrypt from 'bcrypt';
 
 const seedDatabase = async () => {
@@ -11,7 +20,17 @@ const seedDatabase = async () => {
     }
 
     const userRepository = AppDataSource.getRepository(UserEntity);
-    const categoryRepository = AppDataSource.getRepository(CategoryEntity);
+    const categoryRepository =
+      AppDataSource.getRepository(CategoryEntity);
+    const taskRepository =
+      AppDataSource.getRepository(TaskEntity);
+
+    const applicationRepository =
+      AppDataSource.getRepository(
+        TaskApplicationEntity,
+      );
+    const usersByEmail = new Map<string, UserEntity>();
+    const tasksByTitle = new Map<string, TaskEntity>();
 
     console.log('Starting database seed...');
 
@@ -34,9 +53,11 @@ const seedDatabase = async () => {
       });
 
       await userRepository.save(adminUser);
+      usersByEmail.set(adminUser.email, adminUser);
 
       console.log('Admin user created');
     } else {
+      usersByEmail.set(adminExists.email, adminExists);
       console.log('Admin user already exists');
     }
 
@@ -142,9 +163,11 @@ const seedDatabase = async () => {
         });
 
         await userRepository.save(newUser);
+        usersByEmail.set(newUser.email, newUser);
 
         console.log(`User created: ${userData.email}`);
       } else {
+        usersByEmail.set(userExists.email, userExists);
         console.log(`User already exists: ${userData.email}`);
       }
     }
@@ -157,7 +180,151 @@ const seedDatabase = async () => {
       if (!categoryExists) {
         const newCategory = categoryRepository.create(categoryData);
         await categoryRepository.save(newCategory);
-        console.log(`Category created: ${categoryData.name}`);
+
+
+        console.log(
+          `Category created: ${categoryData.name}`,
+        );
+      } else {
+        console.log(
+          `Category already exists: ${categoryData.name}`,
+        );
+      }
+    }
+    // =====================================================
+    // TASKS
+    // =====================================================
+
+    const requester =
+      await userRepository.findOne({
+        where: {
+          email: 'jane.smith@jomnus.com',
+        },
+      });
+
+    if (requester) {
+      const tasks = [
+        {
+          title:
+            'Luxury Penthouse UI Redesign',
+          description:
+            'Need modern UI redesign',
+          requester_id: requester.id,
+          price: 4200,
+          deadline: new Date(
+            '2026-12-31',
+          ),
+          required_workers: 1,
+          status: TaskStatus.POSTED,
+          location_text:
+            'Phnom Penh',
+        },
+
+        {
+          title:
+            'E-commerce API Integration',
+          description:
+            'Backend API work',
+          requester_id: requester.id,
+          price: 1850,
+          deadline: new Date(
+            '2026-12-31',
+          ),
+          required_workers: 1,
+          status: TaskStatus.POSTED,
+          location_text:
+            'Siem Reap',
+        },
+      ];
+
+      for (const taskData of tasks) {
+        const exists =
+          await taskRepository.findOne({
+            where: {
+              title:
+                taskData.title,
+            },
+          });
+
+        if (!exists) {
+          const task =
+            taskRepository.create(
+              taskData,
+            );
+
+          await taskRepository.save(
+            task,
+          );
+          tasksByTitle.set(task.title, task);
+
+          console.log(
+            `Task created: ${task.title}`,
+          );
+        } else {
+          tasksByTitle.set(exists.title, exists);
+        }
+      }
+    }
+    // ================= APPLICATIONS =================
+
+    const performer = usersByEmail.get(
+      'john.doe@jomnus.com',
+    );
+    const taskOne = tasksByTitle.get(
+      'Luxury Penthouse UI Redesign',
+    );
+    const taskTwo = tasksByTitle.get(
+      'E-commerce API Integration',
+    );
+
+    const applications = [
+      performer && taskOne
+        ? {
+            task_id: taskOne.id,
+            performer_id: performer.id,
+            offered_price: 4200,
+            status: ApplicationStatus.PENDING,
+          }
+        : null,
+      performer && taskTwo
+        ? {
+            task_id: taskTwo.id,
+            performer_id: performer.id,
+            offered_price: 1850,
+            status: ApplicationStatus.ACCEPTED,
+          }
+        : null,
+    ].filter(
+      (
+        appData,
+      ): appData is {
+        task_id: number;
+        performer_id: number;
+        offered_price: number;
+        status: ApplicationStatus;
+      } => appData !== null,
+    );
+
+    for (const appData of applications) {
+      const exists =
+        await applicationRepository.findOne({
+          where: {
+            task_id: appData.task_id,
+            performer_id: appData.performer_id,
+          },
+        });
+
+      if (!exists) {
+        const application =
+          applicationRepository.create(appData);
+
+        await applicationRepository.save(
+          application,
+        );
+
+        console.log(
+          `Application created for task ${appData.task_id}`,
+        );
       }
     }
 

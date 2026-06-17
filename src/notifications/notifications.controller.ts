@@ -35,15 +35,15 @@ export class NotificationsController {
   }
 
   @Post('broadcast')
-  async broadcastNotification(
+  async createBroadcast(
     @Request() req,
-    @Body() dto: { title: string; message: string; type?: string }
+    @Body() body: { title: string; message: string }
   ) {
     const userRole = req.user?.currentRole || req.user?.role;
     if (userRole !== 'ADMIN') {
       throw new ForbiddenException('Only administrators can send system-wide broadcasts.');
     }
-    return this.notificationsService.broadcastToAll(dto.title, dto.message);
+    
+    return await this.notificationsService.sendBroadcast(body);
   }
-  
 }

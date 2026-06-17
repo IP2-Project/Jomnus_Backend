@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { TaskAssignmentEntity, AssignmentStatus } from './entities/assignment.entity';
 import { UserEntity } from '@/users/entity/user.entity';
@@ -12,7 +12,9 @@ export class AssignmentsService {
         @InjectRepository(TaskAssignmentEntity)
         private assignRepo: Repository<TaskAssignmentEntity>,
         @InjectRepository(TaskEntity)
-        private taskRepo: Repository<TaskEntity>
+        private taskRepo: Repository<TaskEntity>,
+
+
     ) {}
 
     create(taskId: number, performerId: number,  applicationId: number, price: number) {
@@ -54,7 +56,6 @@ export class AssignmentsService {
         await this.assignRepo.update(id, {
             status: AssignmentStatus.IN_PROGRESS,
         });
-
 
         return { message: 'Marked as in progress' };
     }
@@ -125,9 +126,10 @@ export class AssignmentsService {
                 a.status === AssignmentStatus.COMPLETED ||
                 a.status === AssignmentStatus.VERIFIED,
         ).length;
-
-
+        
         return { message: 'Marked as completed' };
+
+        
     }
 
     async verifyAssignment(id: number, user: UserEntity) {
@@ -161,6 +163,7 @@ export class AssignmentsService {
 
         await this.refreshTaskStatus(assignment.task_id);
 
+        console.log(`[verifyAssignment] assignment.id=${id} updated to VERIFIED, performer_id=${assignment.performer_id}, accepted_price=${assignment.accepted_price}`);
 
         const allAssignments = await this.assignRepo.find({
             where: {
@@ -177,8 +180,10 @@ export class AssignmentsService {
                 status: TaskStatus.COMPLETED,
             });
         }
+    
+    return { message: 'Verified successfully' };
 
-        return { message: 'Verified successfully' };
+        
     }
 
 
@@ -208,6 +213,44 @@ export class AssignmentsService {
         return { message: 'Cancelled' };
     }
 
+    async findOne(id: number) {
+    const assignment = await this.assignRepo.findOne({
+        where: { id },
+        relations: [
+        "task",
+        "task.requester",
+        "performer",
+        "application",
+        ],
+    });
+
+    if (!assignment) {
+        throw new NotFoundException("Assignment not found");
+    }
+
+    return assignment;
+    }
+
+    async getCompletedWorkHistory(userId: number) {
+    const assignments = await this.assignRepo.find({
+        where: {
+        performer_id: userId,
+        status: In([AssignmentStatus.COMPLETED, AssignmentStatus.VERIFIED]),
+        },
+        relations: ['task', 'task.requester'], 
+        order: { created_at: 'DESC' },
+    });
+
+    return assignments.map((a) => ({
+        id: a.id,
+        title: a.task?.title ?? 'Untitled Task',
+        description: a.task?.description ?? '',
+        tag: 'Completed Task',           
+        price: a.accepted_price,         
+        completedAt: a.created_at,
+        requesterName: a.task?.requester?.fullName ?? 'Unknown',
+    }));
+    }
 
     private async refreshTaskStatus(taskId: number) {
         const assignments = await this.assignRepo.find({
@@ -225,8 +268,7 @@ export class AssignmentsService {
         ).length;
 
         const acceptedCount = assignments.length;
-
-        // nobody accepted yet
+        
         if (acceptedCount === 0) {
             await this.taskRepo.update(taskId, {
                 status: TaskStatus.POSTED,
@@ -235,7 +277,6 @@ export class AssignmentsService {
             return;
         }
 
-        // some accepted
         if (verifiedCount === 0) {
             await this.taskRepo.update(taskId, {
                 status: TaskStatus.ACCEPTED,
@@ -244,7 +285,6 @@ export class AssignmentsService {
             return;
         }
 
-        // partially completed
         if (verifiedCount < task.required_workers) {
             await this.taskRepo.update(taskId, {
                 status: TaskStatus.PARTIAL_COMPLETED,
@@ -253,10 +293,10 @@ export class AssignmentsService {
             return;
         }
 
-        // fully completed
         await this.taskRepo.update(taskId, {
             status: TaskStatus.COMPLETED,
         });
-    }
+
+     }
 
 }

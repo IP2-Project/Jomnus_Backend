@@ -19,7 +19,6 @@ export class ReviewsService {
     private readonly taskRepository: Repository<TaskEntity>,
   ) {}
 
-  // ✅ CREATE REVIEW (no change needed)
   async createReview(dto: CreateReviewDto, userId: number): Promise<Review> {
     const assignment = await this.assignmentRepository.findOne({
       where: { id: dto.assignment_id },
@@ -63,15 +62,21 @@ export class ReviewsService {
       reviewer_id: userId,
       reviewee_id: revieweeId,
     });
+    
 
     return this.reviewRepository.save(review);
   }
 
-  // 🔥 FIXED: Reviews ABOUT me (for your UI)
+
   async getReviewsAboutMe(userId: number): Promise<any[]> {
     const reviews = await this.reviewRepository.find({
       where: { reviewee_id: userId },
-      relations: ['reviewer'],
+      relations: {
+        reviewer: true,
+        assignment: {
+          task: true,
+        },
+      },
       order: { created_at: 'DESC' },
     });
 
@@ -82,13 +87,15 @@ export class ReviewsService {
       created_at: review.created_at,
       assignment_id: review.assignment_id,
 
-      // ✅ FIX: flatten relation
+      reviewer_id: review.reviewer_id,
       reviewerName: review.reviewer?.fullName || 'Unknown',
       reviewerImage: review.reviewer?.profileImage || null,
+
+      task_title: review.assignment?.task?.title || 'Unknown task',
     }));
   }
 
-  // 🔥 FIXED: Reviews I gave (optional page)
+
   async getReviewsIGave(userId: number): Promise<any[]> {
     const reviews = await this.reviewRepository.find({
       where: { reviewer_id: userId },
@@ -107,7 +114,6 @@ export class ReviewsService {
     }));
   }
 
-  // ⚠️ keep only if needed (admin/debug)
   async getAllReviews(): Promise<any[]> {
     const reviews = await this.reviewRepository.find({
       relations: ['reviewer', 'reviewee'],
@@ -120,13 +126,13 @@ export class ReviewsService {
       comment: review.comment,
       created_at: review.created_at,
       assignment_id: review.assignment_id,
-
+      reviewer_id: review.reviewer_id,        // ← add this
       reviewerName: review.reviewer?.fullName,
       revieweeName: review.reviewee?.fullName,
     }));
   }
 
-  // ✅ UPDATE (already correct)
+
   async updateReview(
     id: number,
     updateData: Partial<CreateReviewDto>,

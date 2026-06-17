@@ -17,7 +17,6 @@ import { CategoriesModule } from './categories/categories.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { ReviewsModule } from './reviews/reviews.module';
-import { TelegramModule } from './telegram/telegram.module';
 import { HealthModule } from './health/health.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { IdentityVerificationsModule } from './identity-verifications/identity-verifications.module';
@@ -25,6 +24,7 @@ import { StatsModule } from './stats/stats.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { MessagesModule } from './messages/messages.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -59,14 +59,14 @@ import { MessagesModule } from './messages/messages.module';
     AssignmentsModule,
     ProofsModule,
     ReviewsModule,
-    TelegramModule,
     HealthModule,
     ApplicationsModule,
     IdentityVerificationsModule,
     StatsModule,
     NotificationsModule,
     AdminModule,
-    MessagesModule
+    MessagesModule,
+    ChatModule
   ],
   controllers: [AppController],
   providers: [AppService],

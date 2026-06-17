@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,7 +11,7 @@ import { MessageEntity } from '@/messages/entity/messages.entity';
 import { TaskEntity } from '@/tasks/entities/task.entity';
 import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
 import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
-
+import { UserEntity } from '@/users/entity/user.entity';
 
 @Injectable()
 export class ConversationsService {
@@ -25,15 +26,29 @@ export class ConversationsService {
     private readonly applicationRepository: Repository<TaskApplicationEntity>,
     @InjectRepository(MessageEntity)
     private readonly messageRepository: Repository<MessageEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
   ) {}
+
+  private toValidId(value: any, name: string): number {
+    const id = Number(value);
+
+    if (!Number.isInteger(id) || id <= 0 || Number.isNaN(id)) {
+      throw new BadRequestException(`Invalid ${name}`);
+    }
+
+    return id;
+  }
+
   async createConversation(taskId: number, userId: number) {
+    taskId = this.toValidId(taskId, 'taskId');
+    userId = this.toValidId(userId, 'userId');
+
     const task = await this.taskRepository.findOne({
       where: { id: taskId },
     });
 
-    if (!task) {
-      throw new NotFoundException('Task not found');
-    }
+    if (!task) throw new NotFoundException('Task not found');
 
     await this.ensureTaskChatAccess(taskId, userId);
 
@@ -55,9 +70,12 @@ export class ConversationsService {
   }
 
   async getConversationById(conversationId: number, userId: number) {
+    conversationId = this.toValidId(conversationId, 'conversationId');
+    userId = this.toValidId(userId, 'userId');
+
     const conversation = await this.conversationRepository.findOne({
       where: { id: conversationId },
-      relations: ['task'],
+      relations: ['task', 'task.requester'],
     });
 
     if (!conversation) {
@@ -72,18 +90,22 @@ export class ConversationsService {
       order: { created_at: 'DESC' },
     });
 
+    const participant = await this.resolveParticipant(
+      conversation.task,
+      userId,
+    );
+
     return {
       id: conversation.id,
       task_id: conversation.task_id,
+      task_title: conversation.task?.title ?? '',
       created_at: conversation.created_at,
-      lastMessage: lastMessage
-        ? {
-            id: lastMessage.id,
-            sender_id: lastMessage.sender_id,
-            message: lastMessage.message,
-            created_at: lastMessage.created_at,
-          }
-        : null,
+      participantId: participant?.id ?? null,
+      participantName: participant?.fullName ?? 'Unknown User',
+      participantAvatar: participant?.profileImage ?? '',
+      lastMessage: lastMessage?.message ?? '',
+      lastMessageAt: lastMessage?.created_at ?? conversation.created_at,
+      unreadCount: 0,
     };
   }
 
@@ -97,27 +119,38 @@ export class ConversationsService {
     });
 
     const taskIds = new Set<number>();
-
     requesterTasks.forEach((task) => taskIds.add(task.id));
     assignments.forEach((assignment) => taskIds.add(assignment.task_id));
 
-    if (taskIds.size === 0) {
-      return [];
-    }
+    if (taskIds.size === 0) return [];
 
     const conversations = await this.conversationRepository.find({
       where: [...taskIds].map((taskId) => ({ task_id: taskId })),
+      relations: ['task', 'task.requester'],
       order: { created_at: 'DESC' },
     });
 
-    return Promise.all(
-      conversations.map((conversation) =>
-        this.getConversationById(conversation.id, userId),
-      ),
+    const detailed = await Promise.all(
+      conversations.map((c) => this.getConversationById(c.id, userId)),
     );
+
+    const seen = new Map<string, (typeof detailed)[0]>();
+    for (const conv of detailed) {
+      const key = conv.participantId ? String(conv.participantId) : null;
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.set(key, conv);
+      }
+    }
+
+    return [...seen.values()];
   }
 
+
   async ensureConversationAccess(conversationId: number, userId: number) {
+    conversationId = this.toValidId(conversationId, 'conversationId');
+    userId = this.toValidId(userId, 'userId');
+
     const conversation = await this.conversationRepository.findOne({
       where: { id: conversationId },
     });
@@ -131,26 +164,49 @@ export class ConversationsService {
     return conversation;
   }
 
+  private async resolveParticipant(task: TaskEntity, currentUserId: number) {
+    if (task.requester_id === currentUserId) {
+      const assignment = await this.assignmentRepository.findOne({
+        where: { task_id: task.id },
+      });
+
+      if (assignment) {
+        return this.userRepository.findOne({
+          where: { id: assignment.performer_id },
+        });
+      }
+
+      const acceptedApp = await this.applicationRepository.findOne({
+        where: { task_id: task.id, status: 'ACCEPTED' as any },
+      });
+
+      if (acceptedApp) {
+        return this.userRepository.findOne({
+          where: { id: acceptedApp.performer_id },
+        });
+      }
+
+      return null;
+    }
+
+    return task.requester ?? null;
+  }
+
   private async ensureTaskChatAccess(taskId: number, userId: number) {
+    taskId = this.toValidId(taskId, 'taskId');
+    userId = this.toValidId(userId, 'userId');
+
     const task = await this.taskRepository.findOne({
       where: { id: taskId },
     });
 
-    if (!task) {
-      throw new NotFoundException('Task not found');
-    }
+    if (!task) throw new NotFoundException('Task not found');
 
-    if (task.requester_id === userId) {
-      return true;
-    }
+    const isRequester = task.requester_id === userId;
 
     const assignment = await this.assignmentRepository.findOne({
       where: { task_id: taskId, performer_id: userId },
     });
-
-    if (assignment) {
-      return true;
-    }
 
     const acceptedApplication = await this.applicationRepository.findOne({
       where: {
@@ -160,7 +216,7 @@ export class ConversationsService {
       },
     });
 
-    if (acceptedApplication) {
+    if (isRequester || assignment || acceptedApplication) {
       return true;
     }
 

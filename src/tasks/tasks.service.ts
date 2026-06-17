@@ -31,6 +31,7 @@ export class TasksService {
     private taskApplicationRepo: Repository<TaskApplicationEntity>,
 
     private categoriesService: CategoriesService,
+
   ) {}
 
   private mapTaskWithRequester(task: TaskEntity, categories?: unknown) {
@@ -42,8 +43,11 @@ export class TasksService {
             fullName: task.requester.fullName,
             email: task.requester.email,
             profileImage: task.requester.profileImage,
+            isIdentityVerified: task.requester.isIdentityVerified,
+            stats: task.requester.requesterStats || null,
           }
           : null,
+          
       ...(categories ? { categories } : {}),
     };
   }
@@ -62,7 +66,7 @@ export class TasksService {
       location_text: dto.locationText,
       latitude: dto.latitude,
       longitude: dto.longitude,
-    });
+    });  
 
     if (dto.categoryIds?.length) {
       const taskCategories = dto.categoryIds.map((categoryId) => ({
@@ -79,9 +83,9 @@ export class TasksService {
   async findAll(userId: number) {
     const tasks = await this.taskRepo.find({
       where: {
-        status: TaskStatus.POSTED ,
+        status: TaskStatus.POSTED,
       },
-      relations: ['requester'],
+      relations: ['requester', 'requester.performerStats', 'requester.requesterStats'],
       order: { created_at: 'DESC' },
     });
 
@@ -90,6 +94,43 @@ export class TasksService {
     }
 
     const taskIds = tasks.map((task) => task.id);
+
+    // LOAD TASK CATEGORIES
+    const taskCategories = await this.taskCategoryRepo.find({
+      where: {
+        task_id: In(taskIds),
+      },
+    });
+
+    const categoriesByTaskId: Record<number, number[]> = {};
+
+    taskCategories.forEach((tc) => {
+      if (!categoriesByTaskId[tc.task_id]) {
+        categoriesByTaskId[tc.task_id] = [];
+      }
+
+      categoriesByTaskId[tc.task_id].push(tc.category_id);
+    });
+
+    const uniqueCategoryIds = [
+      ...new Set(taskCategories.map((tc) => tc.category_id)),
+    ];
+
+    const allCategories = uniqueCategoryIds.length
+      ? await this.categoriesService.findByIds(uniqueCategoryIds)
+      : [];
+
+    const fullCategoriesByTaskId: Record<number, unknown[]> = {};
+
+    Object.entries(categoriesByTaskId).forEach(
+      ([taskId, categoryIds]) => {
+        fullCategoriesByTaskId[Number(taskId)] =
+          allCategories.filter((cat) =>
+            categoryIds.includes(cat.id),
+          );
+      },
+    );
+
     const applications = await this.taskApplicationRepo.find({
       where: { task_id: In(taskIds) },
       select: ['task_id', 'performer_id', 'status'],
@@ -98,7 +139,8 @@ export class TasksService {
     const acceptedCountByTask = applications.reduce<Record<number, number>>(
       (counts, application) => {
         if (application.status === ApplicationStatus.ACCEPTED) {
-          counts[application.task_id] = (counts[application.task_id] ?? 0) + 1;
+          counts[application.task_id] =
+            (counts[application.task_id] ?? 0) + 1;
         }
 
         return counts;
@@ -108,18 +150,26 @@ export class TasksService {
 
     const appliedTaskIds = new Set(
       applications
-        .filter((application) => application.performer_id === userId)
+        .filter(
+          (application) =>
+            application.performer_id === userId,
+        )
         .map((application) => application.task_id),
     );
 
     return tasks
       .filter(
         (task) =>
-          (acceptedCountByTask[task.id] ?? 0) < task.required_workers,
+          (acceptedCountByTask[task.id] ?? 0) <
+          task.required_workers,
       )
       .map((task) => ({
-        ...this.mapTaskWithRequester(task),
-        acceptedWorkers: acceptedCountByTask[task.id] ?? 0,
+        ...this.mapTaskWithRequester(
+          task,
+          fullCategoriesByTaskId[task.id] || [],
+        ),
+        acceptedWorkers:
+          acceptedCountByTask[task.id] ?? 0,
         hasApplied: appliedTaskIds.has(task.id),
       }));
   }
@@ -128,7 +178,7 @@ export class TasksService {
   async findOne(id: number) {
     const task = await this.taskRepo.findOne({
       where: { id },
-      relations: ['requester'],
+      relations: ['requester', 'requester.performerStats', 'requester.requesterStats'],
     });
 
     if (!task) {
@@ -201,6 +251,19 @@ export class TasksService {
       latitude: dto.latitude,
       longitude: dto.longitude,
     });
+
+    if (dto.categoryIds) {
+      await this.taskCategoryRepo.delete({ task_id: id });
+
+      if (dto.categoryIds.length) {
+        await this.taskCategoryRepo.save(
+          dto.categoryIds.map((categoryId) => ({
+            task_id: id,
+            category_id: categoryId,
+          })),
+        );
+      }
+    }
 
     return this.findOne(id);
   }

@@ -8,7 +8,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { UserEntity } from '@/users/entity/user.entity';
-// 1. IMPORT Expose FROM class-transformer
 import { Expose } from 'class-transformer';
 
 export enum VerificationStatus {
@@ -22,7 +21,6 @@ export class IdentityVerificationEntity {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  // 2. ADD @Expose() HERE to prevent the interceptor from dropping the user object
   @Expose()
   @ManyToOne(() => UserEntity, (user) => user.identityVerifications, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
@@ -47,7 +45,6 @@ export class IdentityVerificationEntity {
   @Column({ nullable: true })
   reviewed_by?: number;
 
-  // 3. ADD @Expose() HERE as well so your reviewer history data displays correctly too
   @Expose()
   @ManyToOne(() => UserEntity, { nullable: true })
   @JoinColumn({ name: 'reviewed_by' })

@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { UserEntity } from '../users/entity/user.entity';
+import { NotificationsGateway } from './notifications.gateway';
+
 @Injectable()
 export class NotificationsService {
   constructor(
@@ -10,9 +12,9 @@ export class NotificationsService {
     private readonly notificationRepo: Repository<Notification>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
-  // --- GENERIC METHOD (Prevents Merge Conflicts) ---
   async createNotification(data: Partial<Notification>) {
     const notification = this.notificationRepo.create(data);
     return await this.notificationRepo.save(notification);
@@ -25,26 +27,45 @@ export class NotificationsService {
       title,
       message,
       task_id: taskId ?? null,
+      type: 'INFO',
     });
-    return this.notificationRepo.save(notification);
+    const saved = await this.notificationRepo.save(notification);
+    this.notificationsGateway.sendToUser(userId, 'personal_notification', {
+      message: message,
+      title: title
+    });
+    return saved;
   }
 
-  async broadcastToAll(title: string, message: string) {
-    const users = await this.userRepo.find({ select: ['id'] });
+  async sendBroadcast(data: { title: string; message: string }) {
+    const { title, message } = data;
+
+    const users = await this.userRepo.find({ 
+      select: ['id'] 
+    });
 
     const notifications = users.map((u) => {
       return this.notificationRepo.create({
         user_id: u.id,
-        audience: 'user',
+        audience: 'user', 
         title: title,
         message: message,
+        type: 'INFO',     
       });
     });
 
     await this.notificationRepo.save(notifications);
-    return { success: true, count: notifications.length };
-  }
 
+    this.notificationsGateway.sendToAll('new_broadcast', {
+      title: title,
+      message: message,
+    });
+    
+    return { 
+      success: true, 
+      sent_count: notifications.length 
+    };
+  }
   async notifyApplicationAccepted(performerId: number, taskTitle: string, taskId: number) {
     return this.sendToUser(performerId, 'Application Accepted ', `Congratulations! You have been chosen to complete: ${taskTitle}.`, taskId);
   }
@@ -85,7 +106,16 @@ export class NotificationsService {
       message,
       task_id: taskId ?? null,
     });
-    return this.notificationRepo.save(notification);
+    
+    const saved = await this.notificationRepo.save(notification);
+
+    // ✨ Trigger the Admin Alert
+    this.notificationsGateway.sendToAdmins('alert', {
+      message: message,
+      title: title
+    });
+
+    return saved;
   }
 
   async notifyAdminNewIdVerification(userId: number) {

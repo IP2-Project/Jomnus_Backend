@@ -9,7 +9,6 @@ import {
 } from '@nestjs/common';
 
 import { AssignmentsService } from './assignments.service';
-import { AssignmentStatus } from './entities/assignment.entity';
 import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 
@@ -59,5 +58,20 @@ export class AssignmentsController {
   getMy(@Req() req: RequestWithUser) {
     return this.assignService.findByUser(req.user.id);
   }  
-  
+
+  @Get('work-history')
+  async getWorkHistory(@Req() req: RequestWithUser) {
+    return this.assignService.getCompletedWorkHistory(req.user.id);
+  }
+
+  @Get('work-history/:userId')
+  async getWorkHistoryByUser(@Param('userId') userId: string) {
+    return this.assignService.getCompletedWorkHistory(Number(userId));
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.assignService.findOne(Number(id));
+  }
+ 
 }

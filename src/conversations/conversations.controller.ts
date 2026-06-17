@@ -6,6 +6,7 @@ import { CreateConversationDto } from './dto/conversations.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { Param } from '@nestjs/common';
 
 interface RequestWithUser extends Request {
   user: UserEntity;
@@ -40,7 +41,7 @@ export class ConversationsController {
   @ApiOperation({ summary: 'Get one conversation' })
   getConversationById(
     @Req() req: RequestWithUser,
-    @Body('id') conversationId: number,
+    @Param('id') conversationId: number,
   ) {
     return this.conversationsService.getConversationById(
       conversationId,

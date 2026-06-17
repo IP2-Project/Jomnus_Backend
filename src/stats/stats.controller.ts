@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   HttpException,
   NotFoundException,
+  Post,
 } from '@nestjs/common';
 import { StatsService } from './stats.service';
 import { UsersService } from '@/users/users.service'; // Add this import
@@ -16,8 +17,14 @@ import { JwtAuthGuard } from '@/auth/guards/jwt.auth.guard';
 export class StatsController {
   constructor(
     private readonly statsService: StatsService,
-    private readonly usersService: UsersService, // Inject UsersService
+    private readonly usersService: UsersService, 
   ) {}
+
+  @Post('refresh')
+  async refreshAll() {
+    await this.statsService.refreshAllStats();
+    return { message: 'Stats refreshed' };
+  }
 
   @Get('performer/:userId')
   async getPerformerStats(@Param('userId', ParseIntPipe) userId: number) {

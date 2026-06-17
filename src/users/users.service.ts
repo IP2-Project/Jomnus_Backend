@@ -17,6 +17,7 @@ import { IdentityVerificationsService } from '@/identity-verifications/identity-
 import { plainToInstance } from 'class-transformer';
 import { SwitchRoleDto } from './dto/switch-role.dto';
 
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -51,11 +52,9 @@ async getPaginatedUsers(query: {
   const { page = 1, limit = 10, role, status, search, pendingOnly, verified } = query;
   const skip = (page - 1) * limit;
 
-  // Initialize query builder and load identity verification requests link
   const queryBuilder = this.usersRepository.createQueryBuilder('user')
-    .leftJoinAndSelect('user.identityVerifications', 'verification'); // 👈 FIXED: Automatically join relations data array logs
+    .leftJoinAndSelect('user.identityVerifications', 'verification');
 
-  // 1. STATUS FILTER
   if (status === 'BANNED') {
     queryBuilder
       .withDeleted() 
@@ -68,22 +67,18 @@ async getPaginatedUsers(query: {
     queryBuilder.withDeleted();
   }
 
-  // 2. PENDING FILTER
   if (pendingOnly === 'true') {
     queryBuilder.andWhere('verification.status = :vStatus', { vStatus: VerificationStatus.PENDING });
   }
 
-  // 3. ROLE FILTER
   if (role && role !== 'ALL') {
     queryBuilder.andWhere('user.currentRole = :role', { role: role.toUpperCase() });
   }
 
-  // 4. VERIFIED FILTER
   if (verified === 'true') {
     queryBuilder.andWhere('(user.isVerified = true OR user.isIdentityVerified = true)');
   }
 
-  // 5. SEARCH FILTER
   if (search) {
     queryBuilder.andWhere(
       '(user.fullName ILIKE :search OR user.email ILIKE :search)',
@@ -97,9 +92,7 @@ async getPaginatedUsers(query: {
     .take(limit)
     .getManyAndCount();
 
-  // 6. FIXED DATA MAPPING
   const data = users.map(user => {
-    // 👈 FIXED: Read the real validation loop to fetch exact text string ('PENDING', 'APPROVED', or 'NONE')
     const latestRequest = user.identityVerifications && user.identityVerifications.length > 0
       ? user.identityVerifications[user.identityVerifications.length - 1]
       : null;
@@ -110,7 +103,7 @@ async getPaginatedUsers(query: {
 
     return {
       ...user,
-      verificationStatus: currentQueueStatus, // 👈 Passes exactly what the queue holds ('PENDING' for Sak and Nak)
+      verificationStatus: currentQueueStatus,
       displayStatus: isAccountBanned ? 'Banned' : 'Active',
       status: isAccountBanned ? UserStatus.BANNED : UserStatus.ACTIVE 
     };
@@ -136,8 +129,6 @@ async getPaginatedUsers(query: {
     return { pendingVerifications, totalUsers };
   }
 
-  // --- IDENTITY WORKFLOW BRIDGES ---
-
   async reviewVerification(id: number, status: VerificationStatus, adminId: number, reason?: string) {
     return this.identityService.review(id, adminId, { status, rejection_reason: reason });
   }
@@ -155,7 +146,6 @@ async getPaginatedUsers(query: {
     });
   }
 
-  // --- ADMIN ACTIONS ---
 
 async manualVerify(userId: number, adminId: number) {
   return await this.dataSource.transaction(async (manager) => {
@@ -311,34 +301,32 @@ async restoreUser(userId: number, adminId: number) {
     return savedUser;
   }
 
-// Banned Function 
-async BanUser(id: number, adminId: number) {
-  if (id === adminId) throw new BadRequestException('You cannot ban yourself.');
-  
-  const user = await this.findById(id);
-  if (!user) throw new NotFoundException('User not found');
+  async BanUser(id: number, adminId: number) {
+    if (id === adminId) throw new BadRequestException('You cannot ban yourself.');
+    
+    const user = await this.findById(id);
+    if (!user) throw new NotFoundException('User not found');
 
-  return await this.dataSource.transaction(async (manager) => {
-    // 1. Mark status as BANNED so they can't log in
-    await manager.update(UserEntity, id, { 
-      status: UserStatus.BANNED,
-      refreshToken: null 
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Mark status as BANNED so they can't log in
+      await manager.update(UserEntity, id, { 
+        status: UserStatus.BANNED,
+        refreshToken: null 
+      });
+
+      // 2. Audit Log
+      await manager.save(AuditLogEntity, {
+        adminId,
+        action: 'USER_BANNED',
+        targetUserId: id, 
+        reason: 'User account banned via admin panel.',
+      });
+
+      // 3. Soft Delete
+      return await manager.softDelete(UserEntity, id);
     });
+  }
 
-    // 2. Audit Log
-    await manager.save(AuditLogEntity, {
-      adminId,
-      action: 'USER_BANNED',
-      targetUserId: id, 
-      reason: 'User account banned via admin panel.',
-    });
-
-    // 3. Soft Delete (Removes them from UI but keeps the ID record in DB)
-    return await manager.softDelete(UserEntity, id);
-  });
-}
-
-  // --- CORE FINDERS ---
 
   async findOneBy(where: any): Promise<UserEntity | null> {
     return await this.usersRepository.findOneBy(where);
@@ -349,11 +337,17 @@ async BanUser(id: number, adminId: number) {
     
     const user = await this.usersRepository.createQueryBuilder('user')
       .leftJoinAndSelect('user.identityVerifications', 'verification')
+      .leftJoinAndSelect('user.tasks', 'tasks')
+      .leftJoinAndSelect('user.reviewsGiven', 'reviewsGiven')
+      .leftJoinAndSelect('user.reviewsReceived', 'reviewsReceived')
+      .leftJoinAndSelect('user.performerStats', 'performerStats')
+      .leftJoinAndSelect('user.requesterStats', 'requesterStats')
       .where('user.id = :id', { id })
       .orderBy('verification.id', 'DESC')
       .getOne();
 
     if (!user) return null;
+    
 
     if (user.identityVerifications) {
       user.identityVerifications = user.identityVerifications.map(v => ({
@@ -363,7 +357,16 @@ async BanUser(id: number, adminId: number) {
       }));
     }
 
-    return user;
+    return {
+      ...user,
+
+      performerStats: user.performerStats || null,
+      requesterStats: user.requesterStats || null,
+      requester_stats: user.requesterStats || null,
+      performer_stats: user.performerStats || null,
+      
+    };
+
   }
 
   async findAll(): Promise<UserEntity[]> {
@@ -374,7 +377,6 @@ async BanUser(id: number, adminId: number) {
     return this.usersRepository.findOne({ where: { email } });
   }
 
-  // --- AUTH & MAINTENANCE ---
 
   async create(registerDto: RegisterAuthDto): Promise<UserEntity> {
     const isInternal = registerDto.email.includes('@jomnus.admin');
@@ -389,6 +391,7 @@ async BanUser(id: number, adminId: number) {
     });
 
     const savedUser = await this.usersRepository.save(user);
+    
     
     if (this.statsService) {
       await this.statsService.createInitialStats(savedUser);
@@ -411,51 +414,42 @@ async BanUser(id: number, adminId: number) {
       await this.usersRepository.save(user);
     }
   }
-  
-//USER
-  // Add UpdateUserDto to your imports at the top
-// import { UpdateUserDto } from './dto/update-user.dto'; 
 
-async updateMe(userId: number, updateUserDto: any) {
-  const user = await this.usersRepository.findOne({ where: { id: userId } });
+  async updateMe(userId: number, updateUserDto: any) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
 
-  if (!user) {
-    throw new NotFoundException('User not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Define which fields are allowed to be updated by the user themselves
+    const allowedUpdates = [
+      'fullName', 
+      'phone', 
+      'bio', 
+      'city', 
+      'country', 
+      'profileImage'
+    ];
+
+    // Merge only allowed fields into the user entity
+    Object.keys(updateUserDto).forEach((key) => {
+      if (allowedUpdates.includes(key)) {
+        user[key] = updateUserDto[key];
+      }
+    });
+
+    return await this.usersRepository.save(user);
   }
 
-  // Define which fields are allowed to be updated by the user themselves
-  const allowedUpdates = [
-    'fullName', 
-    'phone', 
-    'bio', 
-    'city', 
-    'country', 
-    'profileImage'
-  ];
+  async switchUserRole(userId: number, switchRoleDto: SwitchRoleDto) {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
 
-  // Merge only allowed fields into the user entity
-  Object.keys(updateUserDto).forEach((key) => {
-    if (allowedUpdates.includes(key)) {
-      user[key] = updateUserDto[key];
-    }
-  });
+    user.currentRole = switchRoleDto.role;
+    user.isPerformer = (switchRoleDto.role === UserRole.PERFORMER);
 
-  return await this.usersRepository.save(user);
-}
-
-async switchUserRole(userId: number, switchRoleDto: SwitchRoleDto) {
-  const user = await this.usersRepository.findOne({ where: { id: userId } });
-  if (!user) throw new NotFoundException('User not found');
-
-  // Business Logic: If switching to PERFORMER, check verification
-  // if (switchRoleDto.role === UserRole.PERFORMER && !user.isIdentityVerified) {
-  //   throw new BadRequestException('You must complete identity verification to enter Performer mode.');
-  // }
-
-  user.currentRole = switchRoleDto.role;
-  user.isPerformer = (switchRoleDto.role === UserRole.PERFORMER);
-
-  return await this.usersRepository.save(user);
-}
+    return await this.usersRepository.save(user);
+  }
   
 }

@@ -1,5 +1,6 @@
-import { Column, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 import { UserEntity } from "@/users/entity/user.entity";
+import { TaskEntity } from "@/tasks/entities/task.entity";
 
 @Entity('requester_stats')
 export class RequesterStats {
@@ -9,7 +10,7 @@ export class RequesterStats {
   @Column({ unique: true })
   user_id!: number;
 
-  @OneToOne(() => UserEntity)
+  @OneToOne(() => UserEntity, (user) => user.requesterStats, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 

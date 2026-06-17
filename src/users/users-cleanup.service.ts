@@ -15,22 +15,6 @@ export class UsersCleanupService {
     private usersRepository: Repository<UserEntity>,
   ) {}
 
-//   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-//   async handlePermanentDeletion() {
-//     this.logger.log('Checking for users deleted over 30 days ago...');
-
-//     const thirtyDaysAgo = new Date();
-//     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-//     // Find users with their identity verifications included
-//     const expiredUsers = await this.usersRepository.find({
-//       where: {
-//         deletedAt: LessThan(thirtyDaysAgo),
-//       },
-//       relations: ['identityVerifications'], // Load verifications to get document paths
-//       withDeleted: true,
-//     });
-
     @Cron(CronExpression.EVERY_MINUTE)
     async handlePermanentDeletion() {
     const oneMinuteAgo = new Date();
@@ -41,7 +25,7 @@ export class UsersCleanupService {
 
     const expiredUsers = await this.usersRepository.find({
     where: { 
-        deletedAt: LessThan(oneMinuteAgo) // Use deletedAt (no underscore)
+        deletedAt: LessThan(oneMinuteAgo)
     },
     relations: ['identityVerifications'],
     withDeleted: true,
@@ -71,15 +55,10 @@ export class UsersCleanupService {
     }
   }
 
-  /**
-   * Helper to safely delete files from the uploads folder
-   */
   private deleteFile(relativeFilePath: string) {
-    // Skip if it's the manual bypass string used in your manualVerify logic
     if (relativeFilePath === 'MANUAL_BYPASS') return;
 
     try {
-      // Adjust the '..' path to point to your actual 'uploads' directory
       const absolutePath = path.resolve(process.cwd(), relativeFilePath);
 
       if (fs.existsSync(absolutePath)) {

@@ -7,6 +7,9 @@ import { TasksModule } from '@/tasks/tasks.module';
 import { AssignmentsModule } from '@/assignments/assignments.module';
 import { UsersModule } from '@/users/users.module';
 import { NotificationsModule } from '@/notifications/notifications.module';
+import { forwardRef } from '@nestjs/common';
+import { ConversationsModule } from '@/conversations/conversations.module';
+import { ApplicationsGateway } from './applications.gateway';
 
 @Module({
   imports: [
@@ -14,9 +17,10 @@ import { NotificationsModule } from '@/notifications/notifications.module';
     TasksModule,
     AssignmentsModule,
     UsersModule,
-    NotificationsModule
+    NotificationsModule,
+    forwardRef(() => ConversationsModule)
   ],
   controllers: [ApplicationsController],
-  providers: [ApplicationsService],
+  providers: [ApplicationsService, ApplicationsGateway],
 })
 export class ApplicationsModule {}

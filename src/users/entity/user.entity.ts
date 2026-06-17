@@ -14,6 +14,10 @@ import * as bcrypt from 'bcrypt';
 import { PerformerStats } from '@/stats/entities/performer-stats.entity';
 import { RequesterStats } from '@/stats/entities/requester-stats.entity';
 import { IdentityVerificationEntity } from '@/identity-verifications/entities/identity-verification.entity';
+import { TaskEntity } from '@/tasks/entities/task.entity';
+import { Review } from '@/reviews/entities/review.entity';
+import { TaskApplicationEntity } from '@/applications/entities/task-application.entity';
+import { TaskAssignmentEntity } from '@/assignments/entities/assignment.entity';
 
 export enum UserRole {
   REQUESTER = 'REQUESTER',
@@ -28,11 +32,11 @@ export enum UserStatus {
 
 @Entity('users')
 export class UserEntity extends BaseEntity {
-  @Expose() // 👈 CRITICAL: Unlocks full name from interceptor stripping
+  @Expose() 
   @Column({ name: 'FullName' })
   fullName!: string;
 
-  @Expose() // 👈 CRITICAL: Unlocks email from interceptor stripping
+  @Expose()
   @Column({ unique: true })
   email!: string;
 
@@ -40,11 +44,11 @@ export class UserEntity extends BaseEntity {
   @Column()
   password!: string;
 
-  @Expose() // Allow phone to pass through if needed later
+  @Expose()
   @Column({ nullable: true })
   phone?: string;
 
-  @Expose() // 👈 CRITICAL: Unlocks the profile image paths
+  @Expose()
   @Column({ name: 'profile_image', nullable: true })
   profileImage?: string;
 
@@ -75,6 +79,15 @@ export class UserEntity extends BaseEntity {
     default: UserStatus.ACTIVE,
   })
   status!: UserStatus;
+
+  @OneToMany(() => TaskEntity, (task) => task.requester)
+  tasks!: TaskEntity[];
+
+  @OneToMany(() => Review, (review) => review.reviewer)
+  reviewsGiven!: Review[];
+
+  @OneToMany(() => Review, (review) => review.reviewee)
+  reviewsReceived!: Review[];
 
   @Expose()
   verificationStatus?: string;
@@ -116,11 +129,9 @@ export class UserEntity extends BaseEntity {
   deletedAt?: Date;
 
   @OneToOne(() => PerformerStats, (stats) => stats.user)
-  @JoinColumn()
   performerStats!: PerformerStats;
 
   @OneToOne(() => RequesterStats, (stats) => stats.user)
-  @JoinColumn()
   requesterStats!: RequesterStats;
 
   @OneToMany(
@@ -128,6 +139,12 @@ export class UserEntity extends BaseEntity {
     (verification) => verification.user,
   )
   identityVerifications!: IdentityVerificationEntity[];
+
+  @OneToMany(() => TaskApplicationEntity, (app) => app.performer)
+  applications!: TaskApplicationEntity[];
+
+  @OneToMany(() => TaskAssignmentEntity, (assignment) => assignment.performer)
+  assignments!: TaskAssignmentEntity[];
 
   @BeforeInsert()
   @BeforeUpdate()
