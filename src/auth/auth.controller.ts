@@ -13,6 +13,7 @@ import type {
   Response as ExpressResponse,
 } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { LoginAuthDto } from './dto/login.dto';
 import { RegisterAuthDto } from './dto/register-auth.dto';
@@ -30,7 +31,10 @@ interface RequestWithUser extends ExpressRequest {
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private configService: ConfigService,
+  ) {}
   private readonly cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -43,6 +47,98 @@ export class AuthController {
     sameSite: 'lax' as const,
     path: '/',
   };
+
+  private getFrontendUrl(req?: ExpressRequest): string {
+    const nodeEnv =
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.NODE_ENV ||
+      'development';
+
+    const appUrl = (this.configService.get<string>('APP_URL') || '').replace(
+      /\/+$/,
+      '',
+    );
+    const inferredHost =
+      (typeof req?.headers?.['x-forwarded-host'] === 'string'
+        ? req?.headers?.['x-forwarded-host']
+        : undefined) ||
+      req?.headers?.host ||
+      '';
+    const inferredProto =
+      (typeof req?.headers?.['x-forwarded-proto'] === 'string'
+        ? req?.headers?.['x-forwarded-proto']
+        : undefined) || '';
+
+    const rawFrontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ||
+      process.env.FRONTEND_URL ||
+      '';
+
+    const sanitize = (value: string) => value.replace(/\/+$/, '');
+    const isLocalhost = (value: string) => /localhost|127\.0\.0\.1/i.test(value);
+
+    let frontendUrl = rawFrontendUrl ? sanitize(rawFrontendUrl) : '';
+
+    const corsOrigins = (
+      this.configService.get<string>('CORS_ORIGINS') ||
+      process.env.CORS_ORIGINS ||
+      ''
+    )
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const requestLooksRemote =
+      !!inferredHost && !isLocalhost(inferredHost) && !/^\[?::1\]?$/i.test(inferredHost);
+
+    const likelyProd =
+      nodeEnv === 'production' ||
+      requestLooksRemote ||
+      (!!appUrl && !isLocalhost(appUrl));
+
+    if ((!frontendUrl || isLocalhost(frontendUrl)) && likelyProd) {
+      const firstNonLocalOrigin = corsOrigins.find((o) => !isLocalhost(o));
+      if (firstNonLocalOrigin) frontendUrl = sanitize(firstNonLocalOrigin);
+    }
+
+    if ((!frontendUrl || isLocalhost(frontendUrl)) && likelyProd && appUrl) {
+      try {
+        const url = new URL(appUrl);
+        if (url.hostname.startsWith('api.')) {
+          url.hostname = url.hostname.replace(/^api\./, '');
+          frontendUrl = sanitize(url.toString());
+        } else if (url.hostname.includes('jomnusapi.')) {
+          url.hostname = url.hostname.replace('jomnusapi.', 'jomnus.');
+          frontendUrl = sanitize(url.toString());
+        }
+      } catch {
+        // ignore invalid APP_URL
+      }
+    }
+
+    if (
+      (!frontendUrl || isLocalhost(frontendUrl)) &&
+      likelyProd &&
+      inferredHost &&
+      inferredProto
+    ) {
+      // If we're behind a reverse proxy and can infer the external URL,
+      // redirect to the same "site" host by default (frontend can route /auth/callback).
+      frontendUrl = sanitize(`${inferredProto}://${inferredHost}`);
+    }
+
+    if (!frontendUrl) {
+      frontendUrl = 'http://localhost:3000';
+    }
+
+    if (nodeEnv === 'production' && isLocalhost(frontendUrl)) {
+      throw new Error(
+        `Invalid FRONTEND_URL for production: ${frontendUrl}. Set FRONTEND_URL to your deployed web domain.`,
+      );
+    }
+
+    return frontendUrl;
+  }
 
   @Public()
   @Post('login')
@@ -179,9 +275,13 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    return res.redirect(
-      `http://localhost:3000/auth/callback?token=${session.accessToken}&role=${session.user.role}`,
-    );
+    const frontendUrl = this.getFrontendUrl(req);
+    const qs = new URLSearchParams({
+      token: session.accessToken,
+      role: session.user.role,
+    }).toString();
+
+    return res.redirect(`${frontendUrl}/auth/callback?${qs}`);
   }
 
   @Public()

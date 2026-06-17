@@ -10,11 +10,22 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
+    const nodeEnv =
+      configService.get<string>('NODE_ENV') || process.env.NODE_ENV || 'development';
+
+    const appUrl = (configService.get<string>('APP_URL') || '').replace(/\/+$/, '');
     const callbackURL =
       configService.get<string>('GOOGLE_CALLBACK_URL') ||
-      (configService.get<string>('NODE_ENV') === 'production'
-        ? 'https://jomnus.gic26.tech/api/auth/google/callback'
+      (appUrl ? `${appUrl}/api/auth/google/callback` : undefined) ||
+      (nodeEnv === 'production'
+        ? 'https://jomnusapi.gic26.tech/api/auth/google/callback'
         : 'http://localhost:3222/api/auth/google/callback');
+
+    if (nodeEnv === 'production' && /localhost|127\.0\.0\.1/i.test(callbackURL)) {
+      throw new Error(
+        `Invalid GOOGLE_CALLBACK_URL for production: ${callbackURL}. Set GOOGLE_CALLBACK_URL to your deployed API domain.`,
+      );
+    }
 
     super({
       clientID: configService.get<string>('GOOGLE_CLIENT_ID'),
